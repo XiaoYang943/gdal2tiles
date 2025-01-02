@@ -719,140 +719,6 @@ def set_cache_max(cache_in_bytes: int) -> None:
     gdal.SetCacheMax(cache_in_bytes)
 
 
-def generate_kml(
-    tx, ty, tz, tileext, tile_size, tileswne, options, children=None, **args
-):
-    """
-    Template for the KML. Returns filled string.
-    """
-    if not children:
-        children = []
-
-    args["tx"], args["ty"], args["tz"] = tx, ty, tz
-    args["tileformat"] = tileext
-    if "tile_size" not in args:
-        args["tile_size"] = tile_size
-
-    if "minlodpixels" not in args:
-        args["minlodpixels"] = int(args["tile_size"] / 2)
-    if "maxlodpixels" not in args:
-        args["maxlodpixels"] = int(args["tile_size"] * 8)
-    if children == []:
-        args["maxlodpixels"] = -1
-
-    if tx is None:
-        tilekml = False
-        args["xml_escaped_title"] = gdal.EscapeString(options.title, gdal.CPLES_XML)
-    else:
-        tilekml = True
-        args["realtiley"] = GDAL2Tiles.getYTile(ty, tz, options)
-        args["xml_escaped_title"] = "%d/%d/%d.kml" % (tz, tx, args["realtiley"])
-        args["south"], args["west"], args["north"], args["east"] = tileswne(tx, ty, tz)
-
-    if tx == 0:
-        args["drawOrder"] = 2 * tz + 1
-    elif tx is not None:
-        args["drawOrder"] = 2 * tz
-    else:
-        args["drawOrder"] = 0
-
-    url = options.url
-    if not url:
-        if tilekml:
-            url = "../../"
-        else:
-            url = ""
-
-    s = (
-        """<?xml version="1.0" encoding="utf-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
-  <Document>
-    <name>%(xml_escaped_title)s</name>
-    <description></description>
-    <Style>
-      <ListStyle id="hideChildren">
-        <listItemType>checkHideChildren</listItemType>
-      </ListStyle>
-    </Style>"""
-        % args
-    )
-    if tilekml:
-        s += (
-            """
-    <Region>
-      <LatLonAltBox>
-        <north>%(north).14f</north>
-        <south>%(south).14f</south>
-        <east>%(east).14f</east>
-        <west>%(west).14f</west>
-      </LatLonAltBox>
-      <Lod>
-        <minLodPixels>%(minlodpixels)d</minLodPixels>
-        <maxLodPixels>%(maxlodpixels)d</maxLodPixels>
-      </Lod>
-    </Region>
-    <GroundOverlay>
-      <drawOrder>%(drawOrder)d</drawOrder>
-      <Icon>
-        <href>%(realtiley)d.%(tileformat)s</href>
-      </Icon>
-      <LatLonBox>
-        <north>%(north).14f</north>
-        <south>%(south).14f</south>
-        <east>%(east).14f</east>
-        <west>%(west).14f</west>
-      </LatLonBox>
-    </GroundOverlay>
-"""
-            % args
-        )
-
-    for cx, cy, cz in children:
-        csouth, cwest, cnorth, ceast = tileswne(cx, cy, cz)
-        ytile = GDAL2Tiles.getYTile(cy, cz, options)
-        s += """
-    <NetworkLink>
-      <name>%d/%d/%d.%s</name>
-      <Region>
-        <LatLonAltBox>
-          <north>%.14f</north>
-          <south>%.14f</south>
-          <east>%.14f</east>
-          <west>%.14f</west>
-        </LatLonAltBox>
-        <Lod>
-          <minLodPixels>%d</minLodPixels>
-          <maxLodPixels>-1</maxLodPixels>
-        </Lod>
-      </Region>
-      <Link>
-        <href>%s%d/%d/%d.kml</href>
-        <viewRefreshMode>onRegion</viewRefreshMode>
-        <viewFormat/>
-      </Link>
-    </NetworkLink>
-        """ % (
-            cz,
-            cx,
-            ytile,
-            args["tileformat"],
-            cnorth,
-            csouth,
-            ceast,
-            cwest,
-            args["minlodpixels"],
-            url,
-            cz,
-            cx,
-            ytile,
-        )
-
-    s += """      </Document>
-</kml>
-    """
-    return s
-
-
 def scale_query_to_tile(dsquery, dstile, options, tilefilename=""):
     """Scales down query dataset to the tile dataset"""
 
@@ -1455,29 +1321,6 @@ def create_base_tile(tile_job_info: "TileJobInfo", tile_detail: "TileDetail") ->
 
     del dstile
 
-    # Create a KML file for this tile.
-    if tile_job_info.kml:
-        swne = get_tile_swne(tile_job_info, options)
-        if swne is not None:
-            kmlfilename = os.path.join(
-                output,
-                str(tz),
-                str(tx),
-                "%d.kml" % GDAL2Tiles.getYTile(ty, tz, options),
-            )
-            if not options.resume or not isfile(kmlfilename):
-                with my_open(kmlfilename, "wb") as f:
-                    f.write(
-                        generate_kml(
-                            tx,
-                            ty,
-                            tz,
-                            tile_job_info.tile_extension,
-                            tile_job_info.tile_size,
-                            swne,
-                            tile_job_info.options,
-                        ).encode("utf-8")
-                    )
 
 
 def remove_alpha_band(src_ds):
@@ -1680,30 +1523,6 @@ def create_overview_tile(
             % ",".join(["(%d, %d)" % (t[0], t[1]) for t in base_tiles])
         )
 
-    # Create a KML file for this tile.
-    if tile_job_info.kml:
-        swne = get_tile_swne(tile_job_info, options)
-        if swne is not None:
-            with my_open(
-                os.path.join(
-                    output_folder,
-                    "%d/%d/%d.kml" % (overview_tz, overview_tx, overview_ty_real),
-                ),
-                "wb",
-            ) as f:
-                f.write(
-                    generate_kml(
-                        overview_tx,
-                        overview_ty,
-                        overview_tz,
-                        tile_job_info.tile_extension,
-                        tile_job_info.tile_size,
-                        swne,
-                        options,
-                        [(t[0], t[1], base_tz) for t in base_tiles],
-                    ).encode("utf-8")
-                )
-
 
 def group_overview_base_tiles(
     base_tz: int, output_folder: str, tile_job_info: "TileJobInfo"
@@ -1884,38 +1703,6 @@ def optparse_init() -> optparse.OptionParser:
         help="Minimum percentage of source pixels that must be at nodata (or alpha=0 or any other way to express transparent pixel) to cause the target pixel value to be transparent. Default value is 100 (%). Only taken into account for average resampling",
     )
 
-    # KML options
-    g = optparse.OptionGroup(
-        p,
-        "KML (Google Earth) options",
-        "Options for generated Google Earth SuperOverlay metadata",
-    )
-    g.add_option(
-        "-k",
-        "--force-kml",
-        dest="kml",
-        action="store_true",
-        help=(
-            "Generate KML for Google Earth - default for 'geodetic' profile and "
-            "'raster' in EPSG:4326. For a dataset with different projection use "
-            "with caution!"
-        ),
-    )
-    g.add_option(
-        "-n",
-        "--no-kml",
-        dest="kml",
-        action="store_false",
-        help="Avoid automatic generation of KML files for EPSG:4326",
-    )
-    g.add_option(
-        "-u",
-        "--url",
-        dest="url",
-        help="URL address where the generated tiles are going to be published",
-    )
-    p.add_option_group(g)
-
     # HTML options
     g = optparse.OptionGroup(
         p, "Web viewer options", "Options for generated HTML viewers a la Google Maps"
@@ -1990,7 +1777,6 @@ def optparse_init() -> optparse.OptionParser:
     p.set_defaults(
         verbose=False,
         profile="mercator",
-        kml=None,
         url="",
         webviewer="all",
         copyright="",
@@ -2160,7 +1946,6 @@ class TileJobInfo:
     tile_extension = ""
     tile_size = 0
     tile_driver = None
-    kml = False
     tminmax = []
     tminz = 0
     tmaxz = 0
@@ -2264,8 +2049,6 @@ class GDAL2Tiles:
 
         self.tminz, self.tmaxz = self.options.zoom
 
-        # KML generation
-        self.kml = self.options.kml
 
     # -------------------------------------------------------------------------
     def open_input(self) -> None:
@@ -2409,13 +2192,6 @@ class GDAL2Tiles:
         srs4326.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
         if self.out_srs and srs4326.ExportToProj4() == self.out_srs.ExportToProj4():
             self.isepsg4326 = True
-            if self.kml is None:
-                self.kml = True
-            if self.kml and self.options.verbose:
-                logger.debug("KML autotest OK!")
-
-        if self.kml is None:
-            self.kml = False
 
         # Read the georeference
         self.out_gt = self.warped_input_dataset.GetGeoTransform()
@@ -2627,30 +2403,7 @@ class GDAL2Tiles:
                 self.tminmax[tz] = (tminx, tminy, tmaxx, tmaxy)
 
             # Function which generates SWNE in LatLong for given tile
-            if self.kml and self.in_srs_wkt:
-                ct = osr.CoordinateTransformation(self.in_srs, srs4326)
-
-                def rastertileswne(x, y, z):
-                    pixelsizex = (
-                        2 ** (self.tmaxz - z) * self.out_gt[1]
-                    )  # X-pixel size in level
-                    west = self.out_gt[0] + x * self.tile_size * pixelsizex
-                    east = west + self.tile_size * pixelsizex
-                    if self.options.xyz:
-                        north = self.omaxy - y * self.tile_size * pixelsizex
-                        south = north - self.tile_size * pixelsizex
-                    else:
-                        south = self.ominy + y * self.tile_size * pixelsizex
-                        north = south + self.tile_size * pixelsizex
-                    if not self.isepsg4326:
-                        # Transformation to EPSG:4326 (WGS84 datum)
-                        west, south = ct.TransformPoint(west, south)[:2]
-                        east, north = ct.TransformPoint(east, north)[:2]
-                    return south, west, north, east
-
-                self.tileswne = rastertileswne
-            else:
-                self.tileswne = lambda x, y, z: (0, 0, 0, 0)  # noqa
+            self.tileswne = lambda x, y, z: (0, 0, 0, 0)  # noqa
 
         else:
 
@@ -2797,34 +2550,6 @@ class GDAL2Tiles:
             with my_open(os.path.join(self.output_folder, "mapml.mapml"), "wb") as f:
                 f.write(self.generate_mapml().encode("utf-8"))
 
-        if self.kml and self.tileswne is not None:
-            # TODO: Maybe problem for not automatically generated tminz
-            # The root KML should contain links to all tiles in the tminz level
-            children = []
-            xmin, ymin, xmax, ymax = self.tminmax[self.tminz]
-            for x in range(xmin, xmax + 1):
-                for y in range(ymin, ymax + 1):
-                    children.append([x, y, self.tminz])
-            # Generate Root KML
-            if self.kml:
-                if not self.options.resume or not isfile(
-                    os.path.join(self.output_folder, "doc.kml")
-                ):
-                    with my_open(
-                        os.path.join(self.output_folder, "doc.kml"), "wb"
-                    ) as f:
-                        f.write(
-                            generate_kml(
-                                None,
-                                None,
-                                None,
-                                self.tileext,
-                                self.tile_size,
-                                self.tileswne,
-                                self.options,
-                                children,
-                            ).encode("utf-8")
-                        )
 
     def generate_base_tiles(self) -> Tuple[TileJobInfo, List[TileDetail]]:
         """
@@ -2978,7 +2703,6 @@ class GDAL2Tiles:
             tile_extension=self.tileext,
             tile_driver=self.tiledriver,
             tile_size=self.tile_size,
-            kml=self.kml,
             tminmax=self.tminmax,
             tminz=self.tminz,
             tmaxz=self.tmaxz,
@@ -3888,9 +3612,6 @@ function ExtDraggableObject(src, opt_drag) {
             % args
         )  # noqa
 
-        # TODO? when there is self.kml, before the transition to GoogleMapsV3 API,
-        # we used to offer a way to display the KML file in Google Earth
-        # cf https://github.com/OSGeo/gdal/blob/32f32a69bbf5c408c6c8ac2cc6f1d915a7a1c576/swig/python/gdal-utils/osgeo_utils/gdal2tiles.py#L3203 to #L3243
 
         return s
 
@@ -4483,41 +4204,7 @@ def get_tile_swne(tile_job_info, options):
         srs4326 = osr.SpatialReference()
         srs4326.ImportFromEPSG(4326)
         srs4326.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-        if tile_job_info.kml and tile_job_info.in_srs_wkt:
-            in_srs = osr.SpatialReference()
-            in_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-            in_srs.ImportFromWkt(tile_job_info.in_srs_wkt)
-            ct = osr.CoordinateTransformation(in_srs, srs4326)
-
-            def rastertileswne(x, y, z):
-                pixelsizex = (
-                    2 ** (tile_job_info.tmaxz - z) * tile_job_info.out_geo_trans[1]
-                )
-                west = (
-                    tile_job_info.out_geo_trans[0]
-                    + x * tile_job_info.tile_size * pixelsizex
-                )
-                east = west + tile_job_info.tile_size * pixelsizex
-                if options.xyz:
-                    north = (
-                        tile_job_info.out_geo_trans[3]
-                        - y * tile_job_info.tile_size * pixelsizex
-                    )
-                    south = north - tile_job_info.tile_size * pixelsizex
-                else:
-                    south = (
-                        tile_job_info.ominy + y * tile_job_info.tile_size * pixelsizex
-                    )
-                    north = south + tile_job_info.tile_size * pixelsizex
-                if not tile_job_info.is_epsg_4326:
-                    # Transformation to EPSG:4326 (WGS84 datum)
-                    west, south = ct.TransformPoint(west, south)[:2]
-                    east, north = ct.TransformPoint(east, north)[:2]
-                return south, west, north, east
-
-            tile_swne = rastertileswne
-        else:
-            tile_swne = lambda x, y, z: (0, 0, 0, 0)  # noqa
+        tile_swne = lambda x, y, z: (0, 0, 0, 0)  # noqa
     else:
         tile_swne = None
 
