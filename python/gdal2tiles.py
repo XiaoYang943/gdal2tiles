@@ -2661,9 +2661,6 @@ class GDAL2Tiles:
         """
 
         args = {}
-        args["xml_escaped_title"] = gdal.EscapeString(
-            self.options.title, gdal.CPLES_XML
-        )
         args["south"], args["west"], args["north"], args["east"] = self.swne
         args["tile_size"] = self.tile_size
         args["tileformat"] = self.tileext
@@ -2684,7 +2681,7 @@ class GDAL2Tiles:
         s = (
             """<?xml version="1.0" encoding="utf-8"?>
     <TileMap version="1.0.0" tilemapservice="http://tms.osgeo.org/1.0.0">
-      <Title>%(xml_escaped_title)s</Title>
+      <Title>title/Title>
       <Abstract></Abstract>
       <SRS>%(srs)s</SRS>
       <BoundingBox minx="%(west).14f" miny="%(south).14f" maxx="%(east).14f" maxy="%(north).14f"/>
