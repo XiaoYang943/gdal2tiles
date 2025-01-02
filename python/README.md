@@ -7,3 +7,5 @@
    - cd to whl folder
    - execute `pip install GDAL-3.9.2-cp312-cp312-win_amd64.whl`
 3. start gdal2tiles.py
+## params
+- [synopsis](https://gdal.org/en/stable/programs/gdal2tiles.html#synopsis)
