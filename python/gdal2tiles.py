@@ -2681,7 +2681,7 @@ class GDAL2Tiles:
         s = (
             """<?xml version="1.0" encoding="utf-8"?>
     <TileMap version="1.0.0" tilemapservice="http://tms.osgeo.org/1.0.0">
-      <Title>title/Title>
+      <Title>title</Title>
       <Abstract></Abstract>
       <SRS>%(srs)s</SRS>
       <BoundingBox minx="%(west).14f" miny="%(south).14f" maxx="%(east).14f" maxy="%(north).14f"/>
