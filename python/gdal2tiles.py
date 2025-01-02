@@ -37,7 +37,7 @@ from uuid import uuid4
 from xml.etree import ElementTree
 
 from osgeo import gdal, osr
-from osgeo_utils.auxiliary.util import enable_gdal_exceptions
+# from osgeo_utils.auxiliary.util import enable_gdal_exceptions
 
 Options = Any
 
@@ -1771,9 +1771,6 @@ def process_args(argv: List[str], called_from_main=False) -> Tuple[str, str, Opt
 def options_post_processing(
     options: Options, input_file: str, output_folder: str
 ) -> Options:
-    if not options.title:
-        options.title = os.path.basename(input_file)
-
     # User specified zoom levels
     tminz = None
     tmaxz = None
@@ -2832,7 +2829,7 @@ def single_threaded_tiling(
     shutil.rmtree(os.path.dirname(conf.src_file))
 
 
-@enable_gdal_exceptions
+# @enable_gdal_exceptions
 def multi_threaded_tiling(
     input_file: str, output_folder: str, options: Options, pool
 ) -> None:
@@ -2932,7 +2929,7 @@ def main(argv: List[str] = sys.argv, called_from_main=False) -> int:
         return submain(argv, called_from_main=called_from_main)
 
 
-@enable_gdal_exceptions
+# @enable_gdal_exceptions
 def submain(argv: List[str], pool=None, pool_size=0, called_from_main=False) -> int:
 
     argv = gdal.GeneralCmdLineProcessor(argv)
