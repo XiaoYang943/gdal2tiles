@@ -1569,6 +1569,7 @@ def optparse_init() -> optparse.OptionParser:
 
     profile_list = get_profile_list()
 
+    # 切片坐标系
     p.add_option(
         "-p",
         "--profile",
@@ -1580,6 +1581,8 @@ def optparse_init() -> optparse.OptionParser:
             "(Google Maps compatible)" % ",".join(profile_list)
         ),
     )
+
+    # 重采样方法
     p.add_option(
         "-r",
         "--resampling",
@@ -1588,6 +1591,8 @@ def optparse_init() -> optparse.OptionParser:
         choices=resampling_list,
         help="Resampling method (%s) - default 'average'" % ",".join(resampling_list),
     )
+
+    # 输入数据坐标系
     p.add_option(
         "-s",
         "--s_srs",
@@ -1595,12 +1600,16 @@ def optparse_init() -> optparse.OptionParser:
         metavar="SRS",
         help="The spatial reference system used for the source input data",
     )
+
+    # 切片等级
     p.add_option(
         "-z",
         "--zoom",
         dest="zoom",
         help="Zoom levels to render (format:'2-5', '10-' or '10').",
     )
+
+    # 恢复模式，断点续切
     p.add_option(
         "-e",
         "--resume",
@@ -1608,6 +1617,8 @@ def optparse_init() -> optparse.OptionParser:
         action="store_true",
         help="Resume mode. Generate only missing files.",
     )
+
+    # 数据集中被视为透明的的nodata值
     p.add_option(
         "-a",
         "--srcnodata",
@@ -1615,6 +1626,8 @@ def optparse_init() -> optparse.OptionParser:
         metavar="NODATA",
         help="Value in the input dataset considered as transparent",
     )
+
+    # 当切片坐标系使用地理坐标系，需要指定分辨率
     p.add_option(
         "-d",
         "--tmscompatible",
@@ -1625,12 +1638,16 @@ def optparse_init() -> optparse.OptionParser:
             "as 0.703125 or 2 tiles at zoom level 0."
         ),
     )
+
+    # 切片为XYZ
     p.add_option(
         "--xyz",
         action="store_true",
         dest="xyz",
         help="Use XYZ tile numbering (OSM Slippy Map tiles) instead of TMS",
     )
+
+    # 打印日志
     p.add_option(
         "-v",
         "--verbose",
@@ -1638,6 +1655,8 @@ def optparse_init() -> optparse.OptionParser:
         dest="verbose",
         help="Print status messages to stdout",
     )
+
+    # 排除瓦片集中的透明瓦片
     p.add_option(
         "-x",
         "--exclude",
@@ -1645,6 +1664,8 @@ def optparse_init() -> optparse.OptionParser:
         dest="exclude_transparent",
         help="Exclude transparent tiles from result tileset",
     )
+
+    # 关闭日志
     p.add_option(
         "-q",
         "--quiet",
@@ -1652,12 +1673,16 @@ def optparse_init() -> optparse.OptionParser:
         dest="quiet",
         help="Disable messages and status to stdout",
     )
+
+    # 切片进程数
     p.add_option(
         "--processes",
         dest="nb_processes",
         type="int",
         help="Number of processes to use for tiling",
     )
+
+    # 启用 mpiexec 时，用户应将 GDAL_CACHEMAX 合理设置为每个进程的大小
     p.add_option(
         "--mpi",
         action="store_true",
@@ -1665,6 +1690,8 @@ def optparse_init() -> optparse.OptionParser:
         help="Assume launched by mpiexec and ignore --processes. "
         "User should set GDAL_CACHEMAX to size per process.",
     )
+
+    # 切片大小(像素)
     p.add_option(
         "--tilesize",
         dest="tilesize",
@@ -1673,6 +1700,8 @@ def optparse_init() -> optparse.OptionParser:
         type="int",
         help="Width and height in pixel of a tile",
     )
+
+    # 切片格式
     p.add_option(
         "--tiledriver",
         dest="tiledriver",
@@ -1681,12 +1710,16 @@ def optparse_init() -> optparse.OptionParser:
         type="choice",
         help="which tile driver to use for the tiles",
     )
+
+    # 采样方式使用平均重采样时，在重采样期间必须忽略作为贡献源像素的值元组
     p.add_option(
         "--excluded-values",
         dest="excluded_values",
         type=str,
         help="Tuples of values (e.g. <R>,<G>,<B> or (<R1>,<G1>,<B1>),(<R2>,<G2>,<B2>)) that must be ignored as contributing source pixels during resampling. Only taken into account for average resampling",
     )
+
+    # 当设置 --excluded-values 参数时，设置阈值
     p.add_option(
         "--excluded-values-pct-threshold",
         dest="excluded_values_pct_threshold",
@@ -1694,6 +1727,8 @@ def optparse_init() -> optparse.OptionParser:
         default=50,
         help="Minimum percentage of source pixels that must be set at one of the --excluded-values to cause the excluded value, that is in majority among source pixels, to be used as the target pixel value. Default value is 50 (%)",
     )
+
+    # 采样方式使用平均重采样时，要使目标像素值透明的阈值
     p.add_option(
         "--nodata-values-pct-threshold",
         dest="nodata_values_pct_threshold",
@@ -1703,15 +1738,13 @@ def optparse_init() -> optparse.OptionParser:
     )
 
     p.set_defaults(
-        verbose=False,
+        verbose=True,
         profile="mercator",
         url="",
         webviewer="all",
         copyright="",
         resampling="average",
-        resume=False,
-        googlekey="INSERT_YOUR_KEY_HERE",
-        bingkey="INSERT_YOUR_KEY_HERE",
+        resume=True,
         processes=1,
     )
 
@@ -1766,7 +1799,7 @@ def process_args(argv: List[str], called_from_main=False) -> Tuple[str, str, Opt
 
     return input_file, output_folder, options
 
-
+# 预处理，输入参数
 def options_post_processing(
     options: Options, input_file: str, output_folder: str
 ) -> Options:
