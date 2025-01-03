@@ -69,7 +69,6 @@ resampling_list = (
     "q1",
     "q3",
 )
-webviewer_list = ("all", "google", "openlayers", "leaflet", "mapml", "none")
 
 logger = logging.getLogger("gdal2tiles")
 
@@ -2760,25 +2759,6 @@ class ProgressBar:
         self.nb_items_done += nb_items
         progress = float(self.nb_items_done) / self.total_items
         self.progress_cbk(progress, "", None)
-
-
-def get_tile_swne(tile_job_info, options):
-    if options.profile == "mercator":
-        mercator = GlobalMercator()
-        tile_swne = mercator.TileLatLonBounds
-    elif options.profile == "geodetic":
-        geodetic = GlobalGeodetic(options.tmscompatible)
-        tile_swne = geodetic.TileLatLonBounds
-    elif options.profile == "raster":
-        srs4326 = osr.SpatialReference()
-        srs4326.ImportFromEPSG(4326)
-        srs4326.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-        tile_swne = lambda x, y, z: (0, 0, 0, 0)  # noqa
-    else:
-        tile_swne = None
-
-    return tile_swne
-
 
 def single_threaded_tiling(
     input_file: str, output_folder: str, options: Options
