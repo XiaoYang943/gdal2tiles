@@ -848,11 +848,8 @@ def scale_query_to_tile(dsquery, dstile, options, tilefilename=""):
                 "ReprojectImage() failed on %s, error %d" % (tilefilename, res)
             )
 
-
+# 预处理，nodata值(被是为透明的值)
 def setup_no_data_values(input_dataset: gdal.Dataset, options: Options) -> List[float]:
-    """
-    Extract the NODATA values from the dataset or use the passed arguments as override if any
-    """
     in_nodata = []
     if options.srcnodata:
         nds = list(map(float, options.srcnodata.split(",")))
@@ -881,7 +878,7 @@ def setup_no_data_values(input_dataset: gdal.Dataset, options: Options) -> List[
 
     return in_nodata
 
-
+# 预处理，输入坐标系
 def setup_input_srs(
     input_dataset: gdal.Dataset, options: Options
 ) -> Tuple[Optional[osr.SpatialReference], Optional[str]]:
@@ -916,7 +913,7 @@ def setup_input_srs(
 
     return input_srs, input_srs_wkt
 
-
+# 预处理，输出坐标系
 def setup_output_srs(
     input_srs: Optional[osr.SpatialReference], options: Options
 ) -> Optional[osr.SpatialReference]:
@@ -939,14 +936,14 @@ def setup_output_srs(
 
     return output_srs
 
-
+# 预处理，判断数据集是否包含六参数
 def has_georeference(dataset: gdal.Dataset) -> bool:
     return (
         dataset.GetGeoTransform() != (0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
         or dataset.GetGCPCount() != 0
     )
 
-
+# 预处理，重投影数据集
 def reproject_dataset(
     from_dataset: gdal.Dataset,
     from_srs: Optional[osr.SpatialReference],
@@ -1165,7 +1162,7 @@ def update_alpha_value_for_non_alpha_inputs(
 
     return warped_vrt_dataset
 
-
+# 预处理，计算波段数量
 def nb_data_bands(dataset: gdal.Dataset) -> int:
     """
     Return the number of data (non-alpha) bands of a gdal dataset
@@ -1191,7 +1188,7 @@ def _get_creation_options(options):
         copts = ["QUALITY=" + str(options.jpeg_quality)]
     return copts
 
-
+# 最高层级切片
 def create_base_tile(tile_job_info: "TileJobInfo", tile_detail: "TileDetail") -> None:
 
     dataBandsCount = tile_job_info.nb_data_bands
@@ -1209,6 +1206,8 @@ def create_base_tile(tile_job_info: "TileJobInfo", tile_detail: "TileDetail") ->
         ds = gdal.Open(tile_job_info.src_file, gdal.GA_ReadOnly)
         threadLocal.cached_ds = ds
 
+    # MEM: gdal提供的基于内存的栅格图像格式，其大小由用户内存大小决定
+    # MEM常用于作为临时文件保存中间结果，减少磁盘IO
     mem_drv = gdal.GetDriverByName("MEM")
     out_drv = gdal.GetDriverByName(tile_job_info.tile_driver)
     alphaband = ds.GetRasterBand(1).GetMaskBand()
@@ -1228,6 +1227,7 @@ def create_base_tile(tile_job_info: "TileJobInfo", tile_detail: "TileDetail") ->
 
     # Tile dataset in memory
     tilefilename = os.path.join(output, str(tz), str(tx), "%s.%s" % (ty, tileext))
+    # 创建MEM
     dstile = mem_drv.Create("", tile_size, tile_size, tilebands)
     dstile.GetRasterBand(tilebands).SetColorInterpretation(gdal.GCI_AlphaBand)
 
@@ -1250,6 +1250,7 @@ def create_base_tile(tile_job_info: "TileJobInfo", tile_detail: "TileDetail") ->
         ):
             return
 
+        # 从数据集中读取栅格
         data = ds.ReadRaster(
             rx,
             ry,
@@ -1353,7 +1354,7 @@ def remove_alpha_band(src_ds):
 
     return dst_ds
 
-
+# 切片，根据顶层瓦片，构建下层瓦片
 def create_overview_tile(
     base_tz: int,
     base_tiles: List[Tuple[int, int]],
@@ -1361,7 +1362,6 @@ def create_overview_tile(
     tile_job_info: "TileJobInfo",
     options: Options,
 ):
-    """Generating an overview tile from no more than 4 underlying tiles(base tiles)"""
 
     overview_tz = base_tz - 1
     overview_tx = base_tiles[0][0] >> 1
@@ -1522,7 +1522,7 @@ def create_overview_tile(
             % ",".join(["(%d, %d)" % (t[0], t[1]) for t in base_tiles])
         )
 
-
+# 预处理，合并快视图基础瓦片 TODO: ?
 def group_overview_base_tiles(
     base_tz: int, output_folder: str, tile_job_info: "TileJobInfo"
 ) -> List[List[Tuple[int, int]]]:
@@ -1551,7 +1551,7 @@ def group_overview_base_tiles(
 
     return list(overview_to_bases.values())
 
-
+# 预处理，计算非顶层瓦片数量
 def count_overview_tiles(tile_job_info: "TileJobInfo") -> int:
     tile_number = 0
     for tz in range(tile_job_info.tmaxz - 1, tile_job_info.tminz - 1, -1):
@@ -1975,7 +1975,7 @@ class GDAL2Tiles:
         self.tminz, self.tmaxz = self.options.zoom
 
 
-    # -------------------------------------------------------------------------
+    # 打开影像文件
     def open_input(self) -> None:
         """Initialization of the input raster, reprojection if necessary"""
         gdal.AllRegister()
@@ -1993,8 +1993,7 @@ class GDAL2Tiles:
                 "The 'MEM' driver was not found, is it available in this GDAL build?"
             )
 
-        # Open the input file
-
+        # 打开数据集
         if self.input_file:
             input_dataset: gdal.Dataset = gdal.Open(self.input_file, gdal.GA_ReadOnly)
         else:
@@ -2104,6 +2103,7 @@ class GDAL2Tiles:
         if not self.warped_input_dataset:
             self.warped_input_dataset = input_dataset
 
+        # VRT:gdal基于XML格式的虚拟文件格式
         gdal.GetDriverByName("VRT").CreateCopy(
             self.tmp_vrt_filename, self.warped_input_dataset
         )
@@ -2149,7 +2149,7 @@ class GDAL2Tiles:
                 % (round(self.ominx, 13), self.ominy, self.omaxx, self.omaxy)
             )
 
-        # Calculating ranges for tiles in different zoom levels
+        # 根据不同的层级，计算瓦片的范围
         if self.options.profile == "mercator":
 
             self.mercator = GlobalMercator(tile_size=self.tile_size)
@@ -2379,12 +2379,8 @@ class GDAL2Tiles:
                 )
                 logger.debug("MinZoomLevel: %d" % self.tminz)
                 logger.debug("MaxZoomLevel: %d" % self.tmaxz)
-
+    # 构建tms元数据xml
     def generate_metadata(self) -> None:
-        """
-        Generation of main metadata files and HTML viewers (metadata related to particular
-        tiles are generated during the tile processing).
-        """
 
         makedirs(self.output_folder)
 
@@ -2442,11 +2438,8 @@ class GDAL2Tiles:
             with my_open(os.path.join(self.output_folder, "mapml.mapml"), "wb") as f:
                 f.write(self.generate_mapml().encode("utf-8"))
 
-
+    # 直接从输入的栅格数据中，切出在快视图中的最底部层级瓦片(即最高层级)
     def generate_base_tiles(self) -> Tuple[TileJobInfo, List[TileDetail]]:
-        """
-        Generation of the base tiles (the lowest in the pyramid) directly from the input raster
-        """
 
         if not self.options.quiet:
             logger.info("Generating Base Tiles:")
@@ -2571,6 +2564,7 @@ class GDAL2Tiles:
 
                 # Read the source raster if anything is going inside the tile as per the computed
                 # geo_query
+                # todo: ?
                 tile_details.append(
                     TileDetail(
                         tx=tx,
@@ -2735,7 +2729,7 @@ class GDAL2Tiles:
 
         return ty
 
-
+# 构建切片任务列表
 def worker_tile_details(
     input_file: str, output_folder: str, options: Options
 ) -> Tuple[TileJobInfo, List[TileDetail]]:
@@ -2778,6 +2772,7 @@ def single_threaded_tiling(
         base_progress_bar = ProgressBar(len(tile_details))
         base_progress_bar.start()
 
+    # 遍历切片任务列表，串行执行切片任务
     for tile_detail in tile_details:
         create_base_tile(conf, tile_detail)
 
