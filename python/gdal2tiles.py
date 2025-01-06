@@ -1560,7 +1560,7 @@ def count_overview_tiles(tile_job_info: "TileJobInfo") -> int:
 
     return tile_number
 
-
+# 预处理，初始化参数
 def optparse_init() -> optparse.OptionParser:
     """Prepare the option parser for input (argv)"""
 
@@ -1750,7 +1750,7 @@ def optparse_init() -> optparse.OptionParser:
 
     return p
 
-
+# 预处理，初始化参数
 def process_args(argv: List[str], called_from_main=False) -> Tuple[str, str, Options]:
     parser = optparse_init()
     options, args = parser.parse_args(args=argv)
@@ -2787,6 +2787,7 @@ class ProgressBar:
         progress = float(self.nb_items_done) / self.total_items
         self.progress_cbk(progress, "", None)
 
+# 单线程切片
 def single_threaded_tiling(
     input_file: str, output_folder: str, options: Options
 ) -> None:
@@ -2833,7 +2834,7 @@ def single_threaded_tiling(
 
     shutil.rmtree(os.path.dirname(conf.src_file))
 
-
+# 多线程切片
 # @enable_gdal_exceptions
 def multi_threaded_tiling(
     input_file: str, output_folder: str, options: Options, pool
