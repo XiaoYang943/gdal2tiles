@@ -43,11 +43,15 @@ from xml.etree import ElementTree
 
 from osgeo import gdal, osr
 
+from python.cache import DividedCache
 from python.constant import MAXZOOMLEVEL
 from python.globalgeodetic import GlobalGeodetic
 from python.globalmercator import GlobalMercator
-from python.preprocess import reproject_dataset, nb_data_bands, setup_no_data_values, setup_input_srs, has_georeference
+from python.preprocess import reproject_dataset, nb_data_bands, setup_no_data_values, setup_input_srs, has_georeference, \
+    count_overview_tiles
+from python.processbar import ProgressBar
 from python.tiledetail import TileDetail
+from python.tilejobinfo import TileJobInfo
 from python.tilematrixset import TileMatrixSet, UnsupportedTileMatrixSet
 
 # from osgeo_utils.auxiliary.util import enable_gdal_exceptions
@@ -220,13 +224,6 @@ def exit_with_error(message: str, details: str = "") -> NoReturn:
         sys.stderr.write("\n\n%s\n" % details)
 
     sys.exit(2)
-
-
-def set_cache_max(cache_in_bytes: int) -> None:
-    # We set the maximum using `SetCacheMax` and `GDAL_CACHEMAX` to support both fork and spawn as multiprocessing start methods.
-    # https://github.com/OSGeo/gdal/pull/2112
-    os.environ["GDAL_CACHEMAX"] = "%d" % int(cache_in_bytes / 1024 / 1024)
-    gdal.SetCacheMax(cache_in_bytes)
 
 
 def scale_query_to_tile(dsquery, dstile, options, tilefilename=""):
@@ -892,14 +889,7 @@ def group_overview_base_tiles(
 
     return list(overview_to_bases.values())
 
-# 预处理，计算非顶层瓦片数量
-def count_overview_tiles(tile_job_info: "TileJobInfo") -> int:
-    tile_number = 0
-    for tz in range(tile_job_info.tmaxz - 1, tile_job_info.tminz - 1, -1):
-        tminx, tminy, tmaxx, tmaxy = tile_job_info.tminmax[tz]
-        tile_number += (1 + abs(tmaxx - tminx)) * (1 + abs(tmaxy - tminy))
 
-    return tile_number
 
 # 预处理，初始化参数
 def optparse_init() -> optparse.OptionParser:
@@ -1206,42 +1196,6 @@ def options_post_processing(
         logger.debug("Cache: %d MB" % (gdal.GetCacheMax() / 1024 / 1024))
 
     return options
-
-
-class TileJobInfo:
-    """
-    Plain object to hold tile job configuration for a dataset
-    """
-
-    src_file = ""
-    nb_data_bands = 0
-    output_file_path = ""
-    tile_extension = ""
-    tile_size = 0
-    tile_driver = None
-    tminmax = []
-    tminz = 0
-    tmaxz = 0
-    in_srs_wkt = 0
-    out_geo_trans = []
-    ominy = 0
-    is_epsg_4326 = False
-    options = None
-    exclude_transparent = False
-
-    def __init__(self, **kwargs):
-        for key in kwargs:
-            if hasattr(self, key):
-                setattr(self, key, kwargs[key])
-
-    def __unicode__(self):
-        return "TileJobInfo %s\n" % (self.src_file)
-
-    def __str__(self):
-        return "TileJobInfo %s\n" % (self.src_file)
-
-    def __repr__(self):
-        return "TileJobInfo %s\n" % (self.src_file)
 
 
 class Gdal2TilesError(Exception):
@@ -2088,20 +2042,6 @@ def worker_tile_details(
     return tile_job_info, tile_details
 
 
-class ProgressBar:
-    def __init__(self, total_items: int, progress_cbk=gdal.TermProgress_nocb) -> None:
-        self.total_items = total_items
-        self.nb_items_done = 0
-        self.progress_cbk = progress_cbk
-
-    def start(self) -> None:
-        self.progress_cbk(0, "", None)
-
-    def log_progress(self, nb_items: int = 1) -> None:
-        self.nb_items_done += nb_items
-        progress = float(self.nb_items_done) / self.total_items
-        self.progress_cbk(progress, "", None)
-
 # 单线程切片
 def single_threaded_tiling(
     input_file: str, output_folder: str, options: Options
@@ -2204,23 +2144,6 @@ def multi_threaded_tiling(
                 overview_progress_bar.log_progress()
 
     shutil.rmtree(os.path.dirname(conf.src_file))
-
-
-class DividedCache:
-    def __init__(self, nb_processes):
-        self.nb_processes = nb_processes
-
-    def __enter__(self):
-        self.gdal_cache_max = gdal.GetCacheMax()
-        # Make sure that all processes do not consume more than `gdal.GetCacheMax()`
-        gdal_cache_max_per_process = max(
-            1024 * 1024, math.floor(self.gdal_cache_max / self.nb_processes)
-        )
-        set_cache_max(gdal_cache_max_per_process)
-
-    def __exit__(self, type, value, tb):
-        # Set the maximum cache back to the original value
-        set_cache_max(self.gdal_cache_max)
 
 
 def main(argv: List[str] = sys.argv, called_from_main=False) -> int:

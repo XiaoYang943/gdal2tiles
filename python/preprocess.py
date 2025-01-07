@@ -3,6 +3,7 @@ from typing import Optional, Any, List, Tuple
 
 from osgeo import gdal, osr
 
+from python.tilejobinfo import TileJobInfo
 
 Options = Any
 logger = logging.getLogger("preprocess")
@@ -168,3 +169,12 @@ def has_georeference(dataset: gdal.Dataset) -> bool:
         dataset.GetGeoTransform() != (0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
         or dataset.GetGCPCount() != 0
     )
+
+# 预处理，计算非顶层瓦片数量
+def count_overview_tiles(tile_job_info: "TileJobInfo") -> int:
+    tile_number = 0
+    for tz in range(tile_job_info.tmaxz - 1, tile_job_info.tminz - 1, -1):
+        tminx, tminy, tmaxx, tmaxy = tile_job_info.tminmax[tz]
+        tile_number += (1 + abs(tmaxx - tminx)) * (1 + abs(tmaxy - tminy))
+
+    return tile_number
