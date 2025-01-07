@@ -19,6 +19,11 @@
 # SPDX-License-Identifier: MIT
 # ******************************************************************************
 
+r"""
+TMS坐标原点在左下角
+Google Maps坐标原点在左上角
+"""
+
 import contextlib
 import glob
 import json
@@ -344,7 +349,7 @@ class GlobalMercator:
 
      WGS84 coordinates   Spherical Mercator  Pixels in pyramid  Tiles in pyramid
          lat/lon            XY in meters     XY pixels Z zoom      XYZ from TMS
-        EPSG:4326           EPSG:387
+        EPSG:4326           EPSG:3857
          .----.              ---------               --                TMS
         /      \     <->     |       |     <->     /----/    <->      Google
         \      /             |       |           /--------/          QuadTree
@@ -426,11 +431,25 @@ class GlobalMercator:
     def __init__(self, tile_size: int = 256) -> None:
         "Initialize the TMS Global Mercator pyramid"
         self.tile_size = tile_size
+        # 0层级的分辨率156543，其余层级的分辨率依次二分
         self.initialResolution = 2 * math.pi * 6378137 / self.tile_size
-        # 156543.03392804062 for tile_size 256 pixels
+        # 地球赤道半周长20037508
         self.originShift = 2 * math.pi * 6378137 / 2.0
-        # 20037508.342789244
 
+
+    r"""
+            90
+    -180    0,0     180
+            -90
+    """
+
+    r"""
+                20037508
+    -20037508    0,0        20037508
+                -20037508
+    """
+
+    # 经纬度坐标转投影坐标
     def LatLonToMeters(self, lat, lon):
         "Converts given lat/lon in WGS84 Datum to XY in Spherical Mercator EPSG:3857"
 
@@ -440,6 +459,7 @@ class GlobalMercator:
         my = my * self.originShift / 180.0
         return mx, my
 
+    # 投影坐标转地理坐标
     def MetersToLatLon(self, mx, my):
         "Converts XY point from Spherical Mercator EPSG:3857 to lat/lon in WGS84 Datum"
 
@@ -453,6 +473,7 @@ class GlobalMercator:
         )
         return lat, lon
 
+    # 像素坐标转投影坐标
     def PixelsToMeters(self, px, py, zoom):
         "Converts pixel coordinates in given zoom level of pyramid to EPSG:3857"
 
@@ -461,6 +482,7 @@ class GlobalMercator:
         my = py * res - self.originShift
         return mx, my
 
+    # 投影坐标转像素坐标
     def MetersToPixels(self, mx, my, zoom):
         "Converts EPSG:3857 to pyramid pixel coordinates in given zoom level"
 
@@ -469,6 +491,7 @@ class GlobalMercator:
         py = (my + self.originShift) / res
         return px, py
 
+    # 像素坐标转瓦片坐标
     def PixelsToTile(self, px, py):
         "Returns a tile covering region in given pixel coordinates"
 
@@ -476,18 +499,20 @@ class GlobalMercator:
         ty = int(math.ceil(py / float(self.tile_size)) - 1)
         return tx, ty
 
-    def PixelsToRaster(self, px, py, zoom):
-        "Move the origin of pixel coordinates to top-left corner"
+    # def PixelsToRaster(self, px, py, zoom):
+    #     "Move the origin of pixel coordinates to top-left corner"
+    #
+    #     mapSize = self.tile_size << zoom
+    #     return px, mapSize - py
 
-        mapSize = self.tile_size << zoom
-        return px, mapSize - py
-
+    # 投影坐标转瓦片坐标
     def MetersToTile(self, mx, my, zoom):
         "Returns tile for given mercator coordinates"
 
         px, py = self.MetersToPixels(mx, my, zoom)
         return self.PixelsToTile(px, py)
 
+    # 由瓦片id计算瓦片bound(投影坐标)
     def TileBounds(self, tx, ty, zoom):
         "Returns bounds of the given tile in EPSG:3857 coordinates"
 
@@ -497,6 +522,7 @@ class GlobalMercator:
         )
         return (minx, miny, maxx, maxy)
 
+    # 由瓦片id计算瓦片bound(地理坐标)
     def TileLatLonBounds(self, tx, ty, zoom):
         "Returns bounds of the given tile in latitude/longitude using WGS84 datum"
 
@@ -506,12 +532,14 @@ class GlobalMercator:
 
         return (minLat, minLon, maxLat, maxLon)
 
+    # 计算指定层级的分辨率
     def Resolution(self, zoom):
         "Resolution (meters/pixel) for given zoom level (measured at Equator)"
 
         # return (2 * math.pi * 6378137) / (self.tile_size * 2**zoom)
         return self.initialResolution / (2**zoom)
 
+    # TODO
     def ZoomForPixelSize(self, pixelSize):
         "Maximal scaledown zoom of the pyramid closest to the pixelSize."
 
@@ -520,12 +548,14 @@ class GlobalMercator:
                 return max(0, i - 1)  # We don't want to scale up
         return MAXZOOMLEVEL - 1
 
+    # TMS瓦片坐标转Google瓦片坐标
     def GoogleTile(self, tx, ty, zoom):
         "Converts TMS tile coordinates to Google Tile coordinates"
 
         # coordinate origin is moved from bottom-left to top-left corner of the extent
         return tx, (2**zoom - 1) - ty
 
+    # TMS瓦片坐标转Microsoft四叉树的四叉键
     def QuadTree(self, tx, ty, zoom):
         "Converts TMS tile coordinates to Microsoft QuadTree"
 
