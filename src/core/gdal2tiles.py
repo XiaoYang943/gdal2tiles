@@ -8,50 +8,77 @@ from uuid import uuid4
 from osgeo import gdal, osr
 
 from src.common.constant import MAXZOOMLEVEL
-from src.profile.globalgeodetic import GlobalGeodetic
-from src.profile.globalmercator import GlobalMercator
 from src.common.fileutil import makedirs, isfile, my_open
-from src.log.log import exit_with_error
-from src.core.preprocess import setup_no_data_values, setup_input_srs, has_georeference, reproject_dataset, nb_data_bands, \
+from src.core.preprocess import setup_no_data_values, setup_input_srs, has_georeference, reproject_dataset, \
+    nb_data_bands, \
     update_alpha_value_for_non_alpha_inputs, update_no_data_values, setup_output_srs
 from src.core.tiledetail import TileDetail
 from src.core.tilejobinfo import TileJobInfo
+from src.log.log import exit_with_error
+from src.profile.globalgeodetic import GlobalGeodetic
+from src.profile.globalmercator import GlobalMercator
+
 Options = Any
 logger = logging.getLogger("gdal2tiles")
 tms = {}
+
+
 class GDAL2Tiles:
     def __init__(self, input_file: str, output_folder: str, options: Options) -> None:
         """Constructor function - initialization"""
+        # 切片结果数据格式驱动
         self.out_drv = None
+
+        # mem驱动
         self.mem_drv = None
+
+        # 输入的数据集
         self.warped_input_dataset = None
+
+        # 输出坐标系
         self.out_srs = None
-        self.nativezoom = None
+
+        # 具有所有缩放级别的最小最大瓦片坐标的表
         self.tminmax = None
-        self.tsize = None
+
+        # 构造的墨卡托投影
         self.mercator = None
+
+        # 构造的地理坐标系
         self.geodetic = None
+
+        # 数据集的波段数量
         self.dataBandsCount = None
+
+        # 数据集的仿射变换六参数
         self.out_gt = None
+        # 由瓦片坐标计算瓦片bound
         self.tileswne = None
+        # 数据集的envelop
         self.swne = None
+        # 仿射变换六参数-leftTopX
         self.ominx = None
+        # rightTopX
         self.omaxx = None
+        # 仿射变换六参数-leftTopY
         self.omaxy = None
+        # rightBottomY
         self.ominy = None
 
-        self.input_file = None
-        self.output_folder = None
-
+        # 是否是4326
         self.isepsg4326 = None
+
+        # 数据集的srs
         self.in_srs = None
+        # 数据集的srs的wkt
         self.in_srs_wkt = None
 
-        # Tile format
+        # 瓦片大小
         self.tile_size = 256
         if options.tilesize:
             self.tile_size = options.tilesize
 
+        # 输出瓦片格式
         self.tiledriver = options.tiledriver
         if options.tiledriver == "PNG":
             self.tileext = "png"
@@ -59,40 +86,39 @@ class GDAL2Tiles:
             self.tileext = "webp"
         else:
             self.tileext = "jpg"
+
+        # 是否启用gdal的多进程
         if options.mpi:
             makedirs(output_folder)
             self.tmp_dir = tempfile.mkdtemp(dir=output_folder)
         else:
             self.tmp_dir = tempfile.mkdtemp()
+
+        # 临时vrt文件路径
         self.tmp_vrt_filename = os.path.join(self.tmp_dir, str(uuid4()) + ".vrt")
 
-        # Should we read bigger window of the input raster and scale it down?
-        # Note: Modified later by open_input()
-        # Not for 'near' resampling
-        # Not for Wavelet based drivers (JPEG2000, ECW, MrSID)
-        # Not for 'raster' profile
-        self.scaledquery = True
         # How big should be query window be for scaling down
         # Later on reset according the chosen resampling algorithm
+        # 查询大小 TODO ?
         self.querysize = 4 * self.tile_size
 
-        # Should we use Read on the input file for generating overview tiles?
-        # Note: Modified later by open_input()
-        # Otherwise the overview tiles are generated from existing underlying tiles
-        self.overviewquery = False
-
+        # 数据集路径
         self.input_file = input_file
+
+        # 输出文件夹路径
         self.output_folder = output_folder
+
         self.options = options
 
+        # 重采样方法
         if self.options.resampling == "near":
             self.querysize = self.tile_size
 
         elif self.options.resampling == "bilinear":
             self.querysize = self.tile_size * 2
 
+        # 切片级别
         self.tminz, self.tmaxz = self.options.zoom
-
 
     # 打开影像文件
     def open_input(self) -> None:
@@ -194,7 +220,7 @@ class GDAL2Tiles:
                 )
 
             if (self.in_srs.ExportToProj4() != self.out_srs.ExportToProj4()) or (
-                input_dataset.GetGCPCount() != 0
+                    input_dataset.GetGCPCount() != 0
             ):
                 self.warped_input_dataset = reproject_dataset(
                     input_dataset, self.in_srs, self.out_srs
@@ -254,11 +280,11 @@ class GDAL2Tiles:
         # Output Bounds - coordinates in the output SRS
         self.ominx = self.out_gt[0]
         self.omaxx = (
-            self.out_gt[0] + self.warped_input_dataset.RasterXSize * self.out_gt[1]
+                self.out_gt[0] + self.warped_input_dataset.RasterXSize * self.out_gt[1]
         )
         self.omaxy = self.out_gt[3]
         self.ominy = (
-            self.out_gt[3] - self.warped_input_dataset.RasterYSize * self.out_gt[1]
+                self.out_gt[3] - self.warped_input_dataset.RasterYSize * self.out_gt[1]
         )
         # Note: maybe round(x, 14) to avoid the gdal_translate behavior, when 0 becomes -1e-15
 
@@ -283,7 +309,7 @@ class GDAL2Tiles:
                 tmaxx, tmaxy = self.mercator.MetersToTile(self.omaxx, self.omaxy, tz)
                 # crop tiles extending world limits (+-180,+-90)
                 tminx, tminy = max(0, tminx), max(0, tminy)
-                tmaxx, tmaxy = min(2**tz - 1, tmaxx), min(2**tz - 1, tmaxy)
+                tmaxx, tmaxy = min(2 ** tz - 1, tmaxx), min(2 ** tz - 1, tmaxy)
                 self.tminmax[tz] = (tminx, tminy, tmaxx, tmaxy)
 
             # TODO: Maps crossing 180E (Alaska?)
@@ -335,7 +361,7 @@ class GDAL2Tiles:
                 tmaxx, tmaxy = self.geodetic.LonLatToTile(self.omaxx, self.omaxy, tz)
                 # crop tiles extending world limits (+-180,+-90)
                 tminx, tminy = max(0, tminx), max(0, tminy)
-                tmaxx, tmaxy = min(2 ** (tz + 1) - 1, tmaxx), min(2**tz - 1, tmaxy)
+                tmaxx, tmaxy = min(2 ** (tz + 1) - 1, tmaxx), min(2 ** tz - 1, tmaxy)
                 self.tminmax[tz] = (tminx, tminy, tmaxx, tmaxy)
 
             # TODO: Maps crossing 180E (Alaska?)
@@ -410,12 +436,12 @@ class GDAL2Tiles:
                 if self.options.resampling in ("average", "antialias"):
                     resampleAlg = "average"
                 elif self.options.resampling in (
-                    "near",
-                    "bilinear",
-                    "cubic",
-                    "cubicspline",
-                    "lanczos",
-                    "mode",
+                        "near",
+                        "bilinear",
+                        "cubic",
+                        "cubicspline",
+                        "lanczos",
+                        "mode",
                 ):
                     resampleAlg = self.options.resampling
                 else:
@@ -438,10 +464,10 @@ class GDAL2Tiles:
                 tsize = 2.0 ** (self.nativezoom - tz) * self.tile_size
                 tminx, tminy = 0, 0
                 tmaxx = (
-                    int(math.ceil(self.warped_input_dataset.RasterXSize / tsize)) - 1
+                        int(math.ceil(self.warped_input_dataset.RasterXSize / tsize)) - 1
                 )
                 tmaxy = (
-                    int(math.ceil(self.warped_input_dataset.RasterYSize / tsize)) - 1
+                        int(math.ceil(self.warped_input_dataset.RasterYSize / tsize)) - 1
                 )
                 self.tsize[tz] = math.ceil(tsize)
                 self.tminmax[tz] = (tminx, tminy, tmaxx, tmaxy)
@@ -466,8 +492,8 @@ class GDAL2Tiles:
                     self.omaxx, self.omaxy, tz, self.tile_size
                 )
                 tminx, tminy = max(0, tminx), max(0, tminy)
-                tmaxx, tmaxy = min(tms.matrix_width * 2**tz - 1, tmaxx), min(
-                    tms.matrix_height * 2**tz - 1, tmaxy
+                tmaxx, tmaxy = min(tms.matrix_width * 2 ** tz - 1, tmaxx), min(
+                    tms.matrix_height * 2 ** tz - 1, tmaxy
                 )
                 self.tminmax[tz] = (tminx, tminy, tmaxx, tmaxy)
 
@@ -498,6 +524,7 @@ class GDAL2Tiles:
                 )
                 logger.debug("MinZoomLevel: %d" % self.tminz)
                 logger.debug("MaxZoomLevel: %d" % self.tmaxz)
+
     # 构建tms元数据xml
     def generate_metadata(self) -> None:
 
@@ -531,28 +558,28 @@ class GDAL2Tiles:
 
         # Generate tilemapresource.xml.
         if (
-            not self.options.xyz
-            and self.swne is not None
-            and (
+                not self.options.xyz
+                and self.swne is not None
+                and (
                 not self.options.resume
                 or not isfile(os.path.join(self.output_folder, "tilemapresource.xml"))
-            )
+        )
         ):
             with my_open(
-                os.path.join(self.output_folder, "tilemapresource.xml"), "wb"
+                    os.path.join(self.output_folder, "tilemapresource.xml"), "wb"
             ) as f:
                 f.write(self.generate_tilemapresource().encode("utf-8"))
 
         # Generate mapml file
         if (
-            self.options.webviewer in ("all", "mapml")
-            and self.options.xyz
-            and self.options.profile != "raster"
-            and (self.options.profile != "geodetic" or self.options.tmscompatible)
-            and (
+                self.options.webviewer in ("all", "mapml")
+                and self.options.xyz
+                and self.options.profile != "raster"
+                and (self.options.profile != "geodetic" or self.options.tmscompatible)
+                and (
                 not self.options.resume
                 or not isfile(os.path.join(self.output_folder, "mapml.mapml"))
-            )
+        )
         ):
             with my_open(os.path.join(self.output_folder, "mapml.mapml"), "wb") as f:
                 f.write(self.generate_mapml().encode("utf-8"))
@@ -791,38 +818,38 @@ class GDAL2Tiles:
             args["srs"] = ""
 
         s = (
-            """<?xml version="1.0" encoding="utf-8"?>
-    <TileMap version="1.0.0" tilemapservice="http://tms.osgeo.org/1.0.0">
-      <Title>title</Title>
-      <Abstract></Abstract>
-      <SRS>%(srs)s</SRS>
-      <BoundingBox minx="%(west).14f" miny="%(south).14f" maxx="%(east).14f" maxy="%(north).14f"/>
-      <Origin x="%(west).14f" y="%(south).14f"/>
-      <TileFormat width="%(tile_size)d" height="%(tile_size)d" mime-type="image/%(tileformat)s" extension="%(tileformat)s"/>
-      <TileSets profile="%(profile)s">
-"""
-            % args
+                """<?xml version="1.0" encoding="utf-8"?>
+        <TileMap version="1.0.0" tilemapservice="http://tms.osgeo.org/1.0.0">
+          <Title>title</Title>
+          <Abstract></Abstract>
+          <SRS>%(srs)s</SRS>
+          <BoundingBox minx="%(west).14f" miny="%(south).14f" maxx="%(east).14f" maxy="%(north).14f"/>
+          <Origin x="%(west).14f" y="%(south).14f"/>
+          <TileFormat width="%(tile_size)d" height="%(tile_size)d" mime-type="image/%(tileformat)s" extension="%(tileformat)s"/>
+          <TileSets profile="%(profile)s">
+    """
+                % args
         )  # noqa
         for z in range(self.tminz, self.tmaxz + 1):
             if self.options.profile == "raster":
                 s += (
-                    """        <TileSet href="%s%d" units-per-pixel="%.14f" order="%d"/>\n"""
-                    % (
-                        args["publishurl"],
-                        z,
-                        (2 ** (self.nativezoom - z) * self.out_gt[1]),
-                        z,
-                    )
+                        """        <TileSet href="%s%d" units-per-pixel="%.14f" order="%d"/>\n"""
+                        % (
+                            args["publishurl"],
+                            z,
+                            (2 ** (self.nativezoom - z) * self.out_gt[1]),
+                            z,
+                        )
                 )
             elif self.options.profile == "mercator":
                 s += (
-                    """        <TileSet href="%s%d" units-per-pixel="%.14f" order="%d"/>\n"""
-                    % (args["publishurl"], z, 156543.0339 / 2**z, z)
+                        """        <TileSet href="%s%d" units-per-pixel="%.14f" order="%d"/>\n"""
+                        % (args["publishurl"], z, 156543.0339 / 2 ** z, z)
                 )
             elif self.options.profile == "geodetic":
                 s += (
-                    """        <TileSet href="%s%d" units-per-pixel="%.14f" order="%d"/>\n"""
-                    % (args["publishurl"], z, 0.703125 / 2**z, z)
+                        """        <TileSet href="%s%d" units-per-pixel="%.14f" order="%d"/>\n"""
+                        % (args["publishurl"], z, 0.703125 / 2 ** z, z)
                 )
         s += """      </TileSets>
     </TileMap>
@@ -839,11 +866,11 @@ class GDAL2Tiles:
         """
         if options.xyz and options.profile != "raster":
             if options.profile in ("mercator", "geodetic"):
-                return (2**tz - 1) - ty  # Convert from TMS to XYZ numbering system
+                return (2 ** tz - 1) - ty  # Convert from TMS to XYZ numbering system
 
             tms = tmsMap[options.profile]
             return (
-                tms.matrix_height * 2**tz - 1
+                    tms.matrix_height * 2 ** tz - 1
             ) - ty  # Convert from TMS to XYZ numbering system
 
         return ty
