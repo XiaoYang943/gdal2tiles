@@ -6,11 +6,10 @@
 2. install anaconda、start anaconda prompt
    - cd to whl folder
    - execute `pip install GDAL-3.9.2-cp312-cp312-win_amd64.whl`
-3. start gdal2tiles.py
-
-## params
-- [synopsis](https://gdal.org/en/stable/programs/gdal2tiles.html#synopsis)
-- example: -p mercator -z 0-16 --processes 12 "D:\data\raster\dom\0724-5-0727-1dom.tif" "D:\data\raster\tiles\gdal2tiles\python1"
+3. set app configuration
+   - -p mercator -z 0-16 --processes 12 "D:\data\raster\dom\0724-5-0727-1dom.tif" "D:\data\raster\tiles\gdal2tiles\python1"
+   - [detail](https://gdal.org/en/stable/programs/gdal2tiles.html#synopsis)
+4. run main
 
 ## TODO
 1. performance test
