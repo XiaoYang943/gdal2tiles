@@ -1,5 +1,6 @@
 import logging
 from typing import Optional, Any, List, Tuple
+from xml.etree import ElementTree
 
 from osgeo import gdal, osr
 
@@ -178,3 +179,173 @@ def count_overview_tiles(tile_job_info: "TileJobInfo") -> int:
         tile_number += (1 + abs(tmaxx - tminx)) * (1 + abs(tmaxy - tminy))
 
     return tile_number
+
+
+def update_alpha_value_for_non_alpha_inputs(
+    warped_vrt_dataset: gdal.Dataset, options: Optional[Options] = None
+) -> gdal.Dataset:
+    """
+    Handles dataset with 1 or 3 bands, i.e. without alpha channel, in the case the nodata value has
+    not been forced by options
+    """
+    if warped_vrt_dataset.RasterCount in [1, 3]:
+
+        vrt_string = warped_vrt_dataset.GetMetadata("xml:VRT")[0]
+
+        vrt_string = add_alpha_band_to_string_vrt(vrt_string)
+
+        warped_vrt_dataset = gdal.Open(vrt_string)
+
+        if options and options.verbose:
+            logger.debug("Modified -dstalpha warping result saved into 'tiles1.vrt'")
+
+            with open("tiles1.vrt", "w") as f:
+                f.write(warped_vrt_dataset.GetMetadata("xml:VRT")[0])
+
+    return warped_vrt_dataset
+
+
+def update_no_data_values(
+    warped_vrt_dataset: gdal.Dataset,
+    nodata_values: List[float],
+    options: Optional[Options] = None,
+) -> gdal.Dataset:
+    """
+    Takes an array of NODATA values and forces them on the WarpedVRT file dataset passed
+    """
+    # TODO: gbataille - Seems that I forgot tests there
+    assert nodata_values != []
+
+    vrt_string = warped_vrt_dataset.GetMetadata("xml:VRT")[0]
+
+    vrt_string = add_gdal_warp_options_to_string(
+        vrt_string, {"INIT_DEST": "NO_DATA", "UNIFIED_SRC_NODATA": "YES"}
+    )
+
+    # TODO: gbataille - check the need for this replacement. Seems to work without
+    #         # replace BandMapping tag for NODATA bands....
+    #         for i in range(len(nodata_values)):
+    #             s = s.replace(
+    #                 '<BandMapping src="%i" dst="%i"/>' % ((i+1), (i+1)),
+    #                 """
+    # <BandMapping src="%i" dst="%i">
+    # <SrcNoDataReal>%i</SrcNoDataReal>
+    # <SrcNoDataImag>0</SrcNoDataImag>
+    # <DstNoDataReal>%i</DstNoDataReal>
+    # <DstNoDataImag>0</DstNoDataImag>
+    # </BandMapping>
+    #                 """ % ((i+1), (i+1), nodata_values[i], nodata_values[i]))
+
+    corrected_dataset = gdal.Open(vrt_string)
+
+    # set NODATA_VALUE metadata
+    corrected_dataset.SetMetadataItem(
+        "NODATA_VALUES", " ".join([str(i) for i in nodata_values])
+    )
+
+    if options and options.verbose:
+        logger.debug("Modified warping result saved into 'tiles1.vrt'")
+
+        with open("tiles1.vrt", "w") as f:
+            f.write(corrected_dataset.GetMetadata("xml:VRT")[0])
+
+    return corrected_dataset
+
+# 预处理，输出坐标系
+def setup_output_srs(
+    input_srs: Optional[osr.SpatialReference], options: Options
+) -> Optional[osr.SpatialReference]:
+    """
+    Setup the desired SRS (based on options)
+    """
+    output_srs = osr.SpatialReference()
+
+    if options.profile == "mercator":
+        output_srs.ImportFromEPSG(3857)
+    elif options.profile == "geodetic":
+        output_srs.ImportFromEPSG(4326)
+    elif options.profile == "raster":
+        output_srs = input_srs
+
+    if output_srs:
+        output_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+
+    return output_srs
+
+
+def add_gdal_warp_options_to_string(vrt_string, warp_options):
+    if not warp_options:
+        return vrt_string
+
+    vrt_root = ElementTree.fromstring(vrt_string)
+    options = vrt_root.find("GDALWarpOptions")
+
+    if options is None:
+        return vrt_string
+
+    for key, value in warp_options.items():
+        tb = ElementTree.TreeBuilder()
+        tb.start("Option", {"name": key})
+        tb.data(value)
+        tb.end("Option")
+        elem = tb.close()
+        options.insert(0, elem)
+
+    return ElementTree.tostring(vrt_root).decode()
+
+
+def add_alpha_band_to_string_vrt(vrt_string: str) -> str:
+    # TODO: gbataille - Old code speak of this being equivalent to gdalwarp -dstalpha
+    # To be checked
+
+    vrt_root = ElementTree.fromstring(vrt_string)
+
+    index = 0
+    nb_bands = 0
+    for subelem in list(vrt_root):
+        if subelem.tag == "VRTRasterBand":
+            nb_bands += 1
+            color_node = subelem.find("./ColorInterp")
+            if color_node is not None and color_node.text == "Alpha":
+                raise Exception("Alpha band already present")
+        else:
+            if nb_bands:
+                # This means that we are one element after the Band definitions
+                break
+
+        index += 1
+
+    tb = ElementTree.TreeBuilder()
+    tb.start(
+        "VRTRasterBand",
+        {
+            "dataType": "Byte",
+            "band": str(nb_bands + 1),
+            "subClass": "VRTWarpedRasterBand",
+        },
+    )
+    tb.start("ColorInterp", {})
+    tb.data("Alpha")
+    tb.end("ColorInterp")
+    tb.end("VRTRasterBand")
+    elem = tb.close()
+
+    vrt_root.insert(index, elem)
+
+    warp_options = vrt_root.find(".//GDALWarpOptions")
+    tb = ElementTree.TreeBuilder()
+    tb.start("DstAlphaBand", {})
+    tb.data(str(nb_bands + 1))
+    tb.end("DstAlphaBand")
+    elem = tb.close()
+    warp_options.append(elem)
+
+    # TODO: gbataille - this is a GDALWarpOptions. Why put it in a specific place?
+    tb = ElementTree.TreeBuilder()
+    tb.start("Option", {"name": "INIT_DEST"})
+    tb.data("0")
+    tb.end("Option")
+    elem = tb.close()
+    warp_options.append(elem)
+
+    return ElementTree.tostring(vrt_root).decode()
