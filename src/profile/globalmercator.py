@@ -2,6 +2,7 @@ import math
 
 from src.common.constant import MAXZOOMLEVEL
 
+
 class GlobalMercator:
     r"""
     TMS Global Mercator Profile
@@ -109,7 +110,6 @@ class GlobalMercator:
         # 地球赤道半周长20037508
         self.originShift = 2 * math.pi * 6378137 / 2.0
 
-
     r"""
             90
     -180    0,0     180
@@ -140,9 +140,9 @@ class GlobalMercator:
         lat = (my / self.originShift) * 180.0
 
         lat = (
-            180
-            / math.pi
-            * (2 * math.atan(math.exp(lat * math.pi / 180.0)) - math.pi / 2.0)
+                180
+                / math.pi
+                * (2 * math.atan(math.exp(lat * math.pi / 180.0)) - math.pi / 2.0)
         )
         return lat, lon
 
@@ -210,7 +210,7 @@ class GlobalMercator:
         "Resolution (meters/pixel) for given zoom level (measured at Equator)"
 
         # return (2 * math.pi * 6378137) / (self.tile_size * 2**zoom)
-        return self.initialResolution / (2**zoom)
+        return self.initialResolution / (2 ** zoom)
 
     # TODO
     def ZoomForPixelSize(self, pixelSize):
@@ -226,14 +226,14 @@ class GlobalMercator:
         "Converts TMS tile coordinates to Google Tile coordinates"
 
         # coordinate origin is moved from bottom-left to top-left corner of the extent
-        return tx, (2**zoom - 1) - ty
+        return tx, (2 ** zoom - 1) - ty
 
     # TMS瓦片坐标转Microsoft四叉树的四叉键
     def QuadTree(self, tx, ty, zoom):
         "Converts TMS tile coordinates to Microsoft QuadTree"
 
         quadKey = ""
-        ty = (2**zoom - 1) - ty
+        ty = (2 ** zoom - 1) - ty
         for i in range(zoom, 0, -1):
             digit = 0
             mask = 1 << (i - 1)

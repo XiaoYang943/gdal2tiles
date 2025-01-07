@@ -2,6 +2,7 @@ import math
 
 from osgeo import osr
 
+
 class TileMatrixSet:
     def __init__(self) -> None:
         self.identifier = None
@@ -15,16 +16,16 @@ class TileMatrixSet:
         self.level_count = None
 
     def GeorefCoordToTileCoord(self, x, y, z, overriden_tile_size):
-        res = self.resolution * self.tile_size / overriden_tile_size / (2**z)
+        res = self.resolution * self.tile_size / overriden_tile_size / (2 ** z)
         tx = int((x - self.topleft_x) / (res * overriden_tile_size))
         # In default mode, we use a bottom-y origin
         ty = int(
             (
-                y
-                - (
-                    self.topleft_y
-                    - self.matrix_height * self.tile_size * self.resolution
-                )
+                    y
+                    - (
+                            self.topleft_y
+                            - self.matrix_height * self.tile_size * self.resolution
+                    )
             )
             / (res * overriden_tile_size)
         )
@@ -34,7 +35,7 @@ class TileMatrixSet:
         "Maximal scaledown zoom of the pyramid closest to the pixelSize."
 
         for i in range(self.level_count):
-            res = self.resolution * self.tile_size / overriden_tile_size / (2**i)
+            res = self.resolution * self.tile_size / overriden_tile_size / (2 ** i)
             if pixelSize > res:
                 return max(0, i - 1)  # We don't want to scale up
         return self.level_count - 1
@@ -42,10 +43,10 @@ class TileMatrixSet:
     def PixelsToMeters(self, px, py, zoom, overriden_tile_size):
         "Converts pixel coordinates in given zoom level of pyramid to EPSG:3857"
 
-        res = self.resolution * self.tile_size / overriden_tile_size / (2**zoom)
+        res = self.resolution * self.tile_size / overriden_tile_size / (2 ** zoom)
         mx = px * res + self.topleft_x
         my = py * res + (
-            self.topleft_y - self.matrix_height * self.tile_size * self.resolution
+                self.topleft_y - self.matrix_height * self.tile_size * self.resolution
         )
         return mx, my
 
@@ -125,6 +126,7 @@ class TileMatrixSet:
                     )
         tms.level_count = len(j["tileMatrix"])
         return tms
+
 
 class UnsupportedTileMatrixSet(Exception):
     pass

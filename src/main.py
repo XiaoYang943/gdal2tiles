@@ -38,13 +38,13 @@ from typing import Any, List, Tuple
 from osgeo import gdal
 
 from src.cache.cache import DividedCache
-from src.core.gdal2tiles import GDAL2Tiles
 from src.common.fileutil import makedirs, isfile
-from src.log.log import exit_with_error
+from src.core.gdal2tiles import GDAL2Tiles
 from src.core.preprocess import count_overview_tiles
-from src.helper.processbar import ProgressBar
 from src.core.tiledetail import TileDetail
 from src.core.tilejobinfo import TileJobInfo
+from src.helper.processbar import ProgressBar
+from src.log.log import exit_with_error
 
 # from osgeo_utils.auxiliary.util import enable_gdal_exceptions
 
@@ -159,7 +159,7 @@ def scale_query_to_tile(dsquery, dstile, options, tilefilename=""):
     dstile.SetGeoTransform((0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
 
     if options.resampling == "average" and (
-        options.excluded_values or options.nodata_values_pct_threshold < 100
+            options.excluded_values or options.nodata_values_pct_threshold < 100
     ):
 
         warp_options = "-r average"
@@ -281,9 +281,9 @@ def _get_creation_options(options):
         copts = ["QUALITY=" + str(options.jpeg_quality)]
     return copts
 
+
 # 最高层级切片
 def create_base_tile(tile_job_info: "TileJobInfo", tile_detail: "TileDetail") -> None:
-
     dataBandsCount = tile_job_info.nb_data_bands
     output = tile_job_info.output_file_path
     tileext = tile_job_info.tile_extension
@@ -339,7 +339,7 @@ def create_base_tile(tile_job_info: "TileJobInfo", tile_detail: "TileDetail") ->
 
         # Detect totally transparent tile and skip its creation
         if tile_job_info.exclude_transparent and len(alpha) == alpha.count(
-            "\x00".encode("ascii")
+                "\x00".encode("ascii")
         ):
             return
 
@@ -415,11 +415,10 @@ def create_base_tile(tile_job_info: "TileJobInfo", tile_detail: "TileDetail") ->
     del dstile
 
 
-
 def remove_alpha_band(src_ds):
     if (
-        src_ds.GetRasterBand(src_ds.RasterCount).GetColorInterpretation()
-        != gdal.GCI_AlphaBand
+            src_ds.GetRasterBand(src_ds.RasterCount).GetColorInterpretation()
+            != gdal.GCI_AlphaBand
     ):
         return src_ds
 
@@ -447,15 +446,15 @@ def remove_alpha_band(src_ds):
 
     return dst_ds
 
+
 # 切片，根据顶层瓦片，构建下层瓦片
 def create_overview_tile(
-    base_tz: int,
-    base_tiles: List[Tuple[int, int]],
-    output_folder: str,
-    tile_job_info: "TileJobInfo",
-    options: Options,
+        base_tz: int,
+        base_tiles: List[Tuple[int, int]],
+        output_folder: str,
+        tile_job_info: "TileJobInfo",
+        options: Options,
 ):
-
     overview_tz = base_tz - 1
     overview_tx = base_tiles[0][0] >> 1
     overview_ty = base_tiles[0][1] >> 1
@@ -525,9 +524,9 @@ def create_overview_tile(
                 tileposy = 0
 
         if (
-            tile_job_info.tile_driver == "JPEG"
-            and dsquerytile.RasterCount == 3
-            and tilebands == 2
+                tile_job_info.tile_driver == "JPEG"
+                and dsquerytile.RasterCount == 3
+                and tilebands == 2
         ):
             # Input is RGB with R=G=B. Add An alpha band
             tmp_ds = mem_driver.Create(
@@ -615,9 +614,10 @@ def create_overview_tile(
             % ",".join(["(%d, %d)" % (t[0], t[1]) for t in base_tiles])
         )
 
+
 # 预处理，合并快视图基础瓦片 TODO: ?
 def group_overview_base_tiles(
-    base_tz: int, output_folder: str, tile_job_info: "TileJobInfo"
+        base_tz: int, output_folder: str, tile_job_info: "TileJobInfo"
 ) -> List[List[Tuple[int, int]]]:
     """Group base tiles that belong to the same overview tile"""
 
@@ -645,7 +645,6 @@ def group_overview_base_tiles(
     return list(overview_to_bases.values())
 
 
-
 # 预处理，初始化参数
 def optparse_init() -> optparse.OptionParser:
     """Prepare the option parser for input (argv)"""
@@ -663,8 +662,8 @@ def optparse_init() -> optparse.OptionParser:
         type="choice",
         choices=profile_list,
         help=(
-            "Tile cutting profile (%s) - default 'mercator' "
-            "(Google Maps compatible)" % ",".join(profile_list)
+                "Tile cutting profile (%s) - default 'mercator' "
+                "(Google Maps compatible)" % ",".join(profile_list)
         ),
     )
 
@@ -774,7 +773,7 @@ def optparse_init() -> optparse.OptionParser:
         action="store_true",
         dest="mpi",
         help="Assume launched by mpiexec and ignore --processes. "
-        "User should set GDAL_CACHEMAX to size per process.",
+             "User should set GDAL_CACHEMAX to size per process.",
     )
 
     # 切片大小(像素)
@@ -836,6 +835,7 @@ def optparse_init() -> optparse.OptionParser:
 
     return p
 
+
 # 预处理，初始化参数
 def process_args(argv: List[str], called_from_main=False) -> Tuple[str, str, Options]:
     parser = optparse_init()
@@ -885,9 +885,10 @@ def process_args(argv: List[str], called_from_main=False) -> Tuple[str, str, Opt
 
     return input_file, output_folder, options
 
+
 # 预处理，输入参数
 def options_post_processing(
-    options: Options, input_file: str, output_folder: str
+        options: Options, input_file: str, output_folder: str
 ) -> Options:
     # User specified zoom levels
     tminz = None
@@ -959,7 +960,7 @@ class Gdal2TilesError(Exception):
 
 # 构建切片任务列表
 def worker_tile_details(
-    input_file: str, output_folder: str, options: Options
+        input_file: str, output_folder: str, options: Options
 ) -> Tuple[TileJobInfo, List[TileDetail]]:
     gdal2tiles = GDAL2Tiles(input_file, output_folder, options)
     gdal2tiles.open_input()
@@ -970,7 +971,7 @@ def worker_tile_details(
 
 # 单线程切片
 def single_threaded_tiling(
-    input_file: str, output_folder: str, options: Options
+        input_file: str, output_folder: str, options: Options
 ) -> None:
     """
     Keep a single threaded version that stays clear of multiprocessing, for platforms that would not
@@ -1015,10 +1016,11 @@ def single_threaded_tiling(
 
     shutil.rmtree(os.path.dirname(conf.src_file))
 
+
 # 多线程切片
 # @enable_gdal_exceptions
 def multi_threaded_tiling(
-    input_file: str, output_folder: str, options: Options, pool
+        input_file: str, output_folder: str, options: Options, pool
 ) -> None:
     nb_processes = options.nb_processes or 1
 
@@ -1038,7 +1040,7 @@ def multi_threaded_tiling(
     # TODO: gbataille - assign an ID to each job for print in verbose mode "ReadRaster Extent ..."
     chunksize = max(1, min(128, len(tile_details) // nb_processes))
     for _ in pool.imap_unordered(
-        partial(create_base_tile, conf), tile_details, chunksize=chunksize
+            partial(create_base_tile, conf), tile_details, chunksize=chunksize
     ):
         if not options.verbose and not options.quiet:
             base_progress_bar.log_progress()
@@ -1056,15 +1058,15 @@ def multi_threaded_tiling(
         base_tile_groups = group_overview_base_tiles(base_tz, output_folder, conf)
         chunksize = max(1, min(128, len(base_tile_groups) // nb_processes))
         for _ in pool.imap_unordered(
-            partial(
-                create_overview_tile,
-                base_tz,
-                output_folder=output_folder,
-                tile_job_info=conf,
-                options=options,
-            ),
-            base_tile_groups,
-            chunksize=chunksize,
+                partial(
+                    create_overview_tile,
+                    base_tz,
+                    output_folder=output_folder,
+                    tile_job_info=conf,
+                    options=options,
+                ),
+                base_tile_groups,
+                chunksize=chunksize,
         ):
             if not options.verbose and not options.quiet:
                 overview_progress_bar.log_progress()
@@ -1101,7 +1103,6 @@ def main(argv: List[str] = sys.argv, called_from_main=False) -> int:
 
 # @enable_gdal_exceptions
 def submain(argv: List[str], pool=None, pool_size=0, called_from_main=False) -> int:
-
     argv = gdal.GeneralCmdLineProcessor(argv)
     if argv is None:
         return 0
@@ -1131,12 +1132,9 @@ def submain(argv: List[str], pool=None, pool_size=0, called_from_main=False) -> 
     return 0
 
 
-
 # vim: set tabstop=4 shiftwidth=4 expandtab:
 
 # Running main() must be protected that way due to use of multiprocessing on Windows:
 # https://docs.python.org/3/library/multiprocessing.html#the-spawn-and-forkserver-start-methods
 if __name__ == "__main__":
     sys.exit(main(sys.argv, called_from_main=True))
-
-

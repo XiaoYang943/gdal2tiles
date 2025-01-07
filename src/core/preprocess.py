@@ -9,15 +9,17 @@ from src.core.tilejobinfo import TileJobInfo
 Options = Any
 logger = logging.getLogger("preprocess")
 
+
 class GDALError(Exception):
     pass
 
+
 # 预处理，重投影数据集
 def reproject_dataset(
-    from_dataset: gdal.Dataset,
-    from_srs: Optional[osr.SpatialReference],
-    to_srs: Optional[osr.SpatialReference],
-    options: Optional[Options] = None,
+        from_dataset: gdal.Dataset,
+        from_srs: Optional[osr.SpatialReference],
+        to_srs: Optional[osr.SpatialReference],
+        options: Optional[Options] = None,
 ) -> gdal.Dataset:
     """
     Returns the input dataset in the expected "destination" SRS.
@@ -27,13 +29,13 @@ def reproject_dataset(
         raise GDALError("from and to SRS must be defined to reproject the dataset")
 
     if (from_srs.ExportToProj4() != to_srs.ExportToProj4()) or (
-        from_dataset.GetGCPCount() != 0
+            from_dataset.GetGCPCount() != 0
     ):
 
         if (
-            from_srs.IsGeographic()
-            and to_srs.GetAuthorityName(None) == "EPSG"
-            and to_srs.GetAuthorityCode(None) == "3857"
+                from_srs.IsGeographic()
+                and to_srs.GetAuthorityName(None) == "EPSG"
+                and to_srs.GetAuthorityCode(None) == "3857"
         ):
             from_gt = from_dataset.GetGeoTransform(can_return_null=True)
             if from_gt and from_gt[2] == 0 and from_gt[4] == 0 and from_gt[5] < 0:
@@ -82,6 +84,7 @@ def reproject_dataset(
     else:
         return from_dataset
 
+
 # 预处理，计算波段数量
 def nb_data_bands(dataset: gdal.Dataset) -> int:
     """
@@ -89,12 +92,13 @@ def nb_data_bands(dataset: gdal.Dataset) -> int:
     """
     alphaband = dataset.GetRasterBand(1).GetMaskBand()
     if (
-        (alphaband.GetMaskFlags() & gdal.GMF_ALPHA)
-        or dataset.RasterCount == 4
-        or dataset.RasterCount == 2
+            (alphaband.GetMaskFlags() & gdal.GMF_ALPHA)
+            or dataset.RasterCount == 4
+            or dataset.RasterCount == 2
     ):
         return dataset.RasterCount - 1
     return dataset.RasterCount
+
 
 # 预处理，nodata值(被是为透明的值)
 def setup_no_data_values(input_dataset: gdal.Dataset, options: Options) -> List[float]:
@@ -112,9 +116,9 @@ def setup_no_data_values(input_dataset: gdal.Dataset, options: Options) -> List[
             if raster_no_data is not None:
                 # Ignore nodata values that are not in the range of the band data type (see https://github.com/OSGeo/gdal/pull/2299)
                 if band.DataType == gdal.GDT_Byte and (
-                    raster_no_data != int(raster_no_data)
-                    or raster_no_data < 0
-                    or raster_no_data > 255
+                        raster_no_data != int(raster_no_data)
+                        or raster_no_data < 0
+                        or raster_no_data > 255
                 ):
                     # We should possibly do similar check for other data types
                     in_nodata = []
@@ -126,9 +130,10 @@ def setup_no_data_values(input_dataset: gdal.Dataset, options: Options) -> List[
 
     return in_nodata
 
+
 # 预处理，输入坐标系
 def setup_input_srs(
-    input_dataset: gdal.Dataset, options: Options
+        input_dataset: gdal.Dataset, options: Options
 ) -> Tuple[Optional[osr.SpatialReference], Optional[str]]:
     """
     Determines and returns the Input Spatial Reference System (SRS) as an osr object and as a
@@ -162,14 +167,13 @@ def setup_input_srs(
     return input_srs, input_srs_wkt
 
 
-
-
 # 预处理，判断数据集是否包含六参数
 def has_georeference(dataset: gdal.Dataset) -> bool:
     return (
-        dataset.GetGeoTransform() != (0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
-        or dataset.GetGCPCount() != 0
+            dataset.GetGeoTransform() != (0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+            or dataset.GetGCPCount() != 0
     )
+
 
 # 预处理，计算非顶层瓦片数量
 def count_overview_tiles(tile_job_info: "TileJobInfo") -> int:
@@ -182,7 +186,7 @@ def count_overview_tiles(tile_job_info: "TileJobInfo") -> int:
 
 
 def update_alpha_value_for_non_alpha_inputs(
-    warped_vrt_dataset: gdal.Dataset, options: Optional[Options] = None
+        warped_vrt_dataset: gdal.Dataset, options: Optional[Options] = None
 ) -> gdal.Dataset:
     """
     Handles dataset with 1 or 3 bands, i.e. without alpha channel, in the case the nodata value has
@@ -206,9 +210,9 @@ def update_alpha_value_for_non_alpha_inputs(
 
 
 def update_no_data_values(
-    warped_vrt_dataset: gdal.Dataset,
-    nodata_values: List[float],
-    options: Optional[Options] = None,
+        warped_vrt_dataset: gdal.Dataset,
+        nodata_values: List[float],
+        options: Optional[Options] = None,
 ) -> gdal.Dataset:
     """
     Takes an array of NODATA values and forces them on the WarpedVRT file dataset passed
@@ -251,9 +255,10 @@ def update_no_data_values(
 
     return corrected_dataset
 
+
 # 预处理，输出坐标系
 def setup_output_srs(
-    input_srs: Optional[osr.SpatialReference], options: Options
+        input_srs: Optional[osr.SpatialReference], options: Options
 ) -> Optional[osr.SpatialReference]:
     """
     Setup the desired SRS (based on options)

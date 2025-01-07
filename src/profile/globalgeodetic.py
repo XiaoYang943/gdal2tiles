@@ -54,7 +54,7 @@ class GlobalGeodetic:
     def LonLatToPixels(self, lon, lat, zoom):
         "Converts lon/lat to pixel coordinates in given zoom of the EPSG:4326 pyramid"
 
-        res = self.resFact / 2**zoom
+        res = self.resFact / 2 ** zoom
         px = (180 + lon) / res
         py = (90 + lat) / res
         return px, py
@@ -75,7 +75,7 @@ class GlobalGeodetic:
     def Resolution(self, zoom):
         "Resolution (arc/pixel) for given zoom level (measured at Equator)"
 
-        return self.resFact / 2**zoom
+        return self.resFact / 2 ** zoom
 
     def ZoomForPixelSize(self, pixelSize):
         "Maximal scaledown zoom of the pyramid closest to the pixelSize."
@@ -87,7 +87,7 @@ class GlobalGeodetic:
 
     def TileBounds(self, tx, ty, zoom):
         "Returns bounds of the given tile"
-        res = self.resFact / 2**zoom
+        res = self.resFact / 2 ** zoom
         return (
             tx * self.tile_size * res - 180,
             ty * self.tile_size * res - 90,
