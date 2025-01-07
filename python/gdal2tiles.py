@@ -2281,14 +2281,6 @@ def submain(argv: List[str], pool=None, pool_size=0, called_from_main=False) -> 
 
     return 0
 
-
-# vim: set tabstop=4 shiftwidth=4 expandtab:
-
-# Running main() must be protected that way due to use of multiprocessing on Windows:
-# https://docs.python.org/3/library/multiprocessing.html#the-spawn-and-forkserver-start-methods
-if __name__ == "__main__":
-    sys.exit(main(sys.argv, called_from_main=True))
-
 # 预处理，输出坐标系
 def setup_output_srs(
     input_srs: Optional[osr.SpatialReference], options: Options
@@ -2311,3 +2303,12 @@ def setup_output_srs(
         output_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
 
     return output_srs
+
+# vim: set tabstop=4 shiftwidth=4 expandtab:
+
+# Running main() must be protected that way due to use of multiprocessing on Windows:
+# https://docs.python.org/3/library/multiprocessing.html#the-spawn-and-forkserver-start-methods
+if __name__ == "__main__":
+    sys.exit(main(sys.argv, called_from_main=True))
+
+
