@@ -4,7 +4,6 @@ import stat
 
 from osgeo import gdal
 
-
 def makedirs(path):
     """Wrapper for os.makedirs() that can work with /vsi files too"""
     if path.startswith("/vsi"):

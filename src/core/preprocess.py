@@ -4,7 +4,7 @@ from xml.etree import ElementTree
 
 from osgeo import gdal, osr
 
-from python.tilejobinfo import TileJobInfo
+from src.core.tilejobinfo import TileJobInfo
 
 Options = Any
 logger = logging.getLogger("preprocess")

@@ -3,7 +3,6 @@ import os
 
 from osgeo import gdal
 
-
 class DividedCache:
     def __init__(self, nb_processes):
         self.nb_processes = nb_processes

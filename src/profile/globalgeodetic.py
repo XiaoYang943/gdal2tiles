@@ -1,7 +1,7 @@
 import math
 from typing import Optional
 
-from python.constant import MAXZOOMLEVEL
+from src.common.constant import MAXZOOMLEVEL
 
 
 class GlobalGeodetic:

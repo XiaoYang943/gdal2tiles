@@ -1,7 +1,6 @@
 import math
 
-from python.constant import MAXZOOMLEVEL
-
+from src.common.constant import MAXZOOMLEVEL
 
 class GlobalMercator:
     r"""

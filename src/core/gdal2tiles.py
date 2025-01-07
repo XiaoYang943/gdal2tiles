@@ -7,15 +7,15 @@ from uuid import uuid4
 
 from osgeo import gdal, osr
 
-from python.constant import MAXZOOMLEVEL
-from python.globalgeodetic import GlobalGeodetic
-from python.globalmercator import GlobalMercator
-from python.fileutil import makedirs, isfile, my_open
-from python.log import exit_with_error
-from python.preprocess import setup_no_data_values, setup_input_srs, has_georeference, reproject_dataset, nb_data_bands, \
+from src.common.constant import MAXZOOMLEVEL
+from src.profile.globalgeodetic import GlobalGeodetic
+from src.profile.globalmercator import GlobalMercator
+from src.common.fileutil import makedirs, isfile, my_open
+from src.log.log import exit_with_error
+from src.core.preprocess import setup_no_data_values, setup_input_srs, has_georeference, reproject_dataset, nb_data_bands, \
     update_alpha_value_for_non_alpha_inputs, update_no_data_values, setup_output_srs
-from python.tiledetail import TileDetail
-from python.tilejobinfo import TileJobInfo
+from src.core.tiledetail import TileDetail
+from src.core.tilejobinfo import TileJobInfo
 Options = Any
 logger = logging.getLogger("gdal2tiles")
 tms = {}

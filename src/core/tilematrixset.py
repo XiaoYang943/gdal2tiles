@@ -2,7 +2,6 @@ import math
 
 from osgeo import osr
 
-
 class TileMatrixSet:
     def __init__(self) -> None:
         self.identifier = None

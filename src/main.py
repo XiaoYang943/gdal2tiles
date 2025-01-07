@@ -37,14 +37,14 @@ from typing import Any, List, Tuple
 
 from osgeo import gdal
 
-from python.cache import DividedCache
-from python.gdal2tiles import GDAL2Tiles
-from python.fileutil import makedirs, isfile
-from python.log import exit_with_error
-from python.preprocess import count_overview_tiles
-from python.processbar import ProgressBar
-from python.tiledetail import TileDetail
-from python.tilejobinfo import TileJobInfo
+from src.cache.cache import DividedCache
+from src.core.gdal2tiles import GDAL2Tiles
+from src.common.fileutil import makedirs, isfile
+from src.log.log import exit_with_error
+from src.core.preprocess import count_overview_tiles
+from src.helper.processbar import ProgressBar
+from src.core.tiledetail import TileDetail
+from src.core.tilejobinfo import TileJobInfo
 
 # from osgeo_utils.auxiliary.util import enable_gdal_exceptions
 

@@ -1,6 +1,5 @@
 from osgeo import gdal
 
-
 class ProgressBar:
     def __init__(self, total_items: int, progress_cbk=gdal.TermProgress_nocb) -> None:
         self.total_items = total_items

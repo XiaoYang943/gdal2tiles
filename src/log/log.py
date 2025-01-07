@@ -1,7 +1,6 @@
 import sys
 from typing import NoReturn
 
-
 def exit_with_error(message: str, details: str = "") -> NoReturn:
     # Message printing and exit code kept from the way it worked using the OptionParser (in case
     # someone parses the error output)
