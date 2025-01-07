@@ -397,7 +397,7 @@ def create_base_tile(tile_job_info: "TileJobInfo", tile_detail: "TileDetail") ->
     del data
 
     if options.resampling != "antialias":
-        # Write a copy of tile to png/jpg
+        # 切顶层瓦片为图片
         out_drv.CreateCopy(
             tilefilename,
             dstile
@@ -594,7 +594,7 @@ def create_overview_tile(
     scale_query_to_tile(dsquery, dstile, options, tilefilename=tilefilename)
     # Write a copy of tile to png/jpg
     if options.resampling != "antialias":
-        # Write a copy of tile to png/jpg
+        # 切子层瓦片为图片
         out_driver.CreateCopy(
             tilefilename,
             dstile
