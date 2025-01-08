@@ -139,6 +139,7 @@ Class is available under the open-source GDAL license (www.gdal.org).
 """
 
 
+# 将查询数据集缩放到瓦片数据集，把高层级的四张合并为一张
 def scale_query_to_tile(dsquery, dstile, options, tilefilename=""):
     """Scales down query dataset to the tile dataset"""
 
@@ -156,6 +157,7 @@ def scale_query_to_tile(dsquery, dstile, options, tilefilename=""):
             tile_size / float(querysize),
         )
     )
+    # 设置默认仿射变换参数到目标数据集
     dstile.SetGeoTransform((0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
 
     if options.resampling == "average" and (
@@ -467,10 +469,11 @@ def create_overview_tile(
         "%s.%s" % (overview_ty_real, tile_job_info.tile_extension),
     )
     if options.verbose:
-        logger.debug(tilefilename)
+        logger.debug("")
+        logger.debug("瓦片路径：%s" % tilefilename)
     if options.resume and isfile(tilefilename):
         if options.verbose:
-            logger.debug("Tile generation skipped because of --resume")
+            logger.debug("已有的瓦片不再构建")
         return
 
     mem_driver = gdal.GetDriverByName("MEM")
@@ -479,6 +482,7 @@ def create_overview_tile(
 
     tilebands = tile_job_info.nb_data_bands + 1
 
+    # 创建大小为父级瓦片四倍的临时数据集，用于存储父级的四张瓦片
     dsquery = mem_driver.Create(
         "", 2 * tile_job_info.tile_size, 2 * tile_job_info.tile_size, tilebands
     )
@@ -487,6 +491,8 @@ def create_overview_tile(
     dstile = mem_driver.Create(
         "", tile_job_info.tile_size, tile_job_info.tile_size, tilebands
     )
+
+    # 创建大小为父级瓦片临时数据集，用于存储本级瓦片切片结果
     dstile.GetRasterBand(tilebands).SetColorInterpretation(gdal.GCI_AlphaBand)
 
     usable_base_tiles = []
@@ -502,6 +508,7 @@ def create_overview_tile(
             str(base_tx),
             "%s.%s" % (base_ty_real, tile_job_info.tile_extension),
         )
+        logger.info("父瓦片路径：%s" % base_tile_path)
         if not isfile(base_tile_path):
             continue
 
@@ -610,7 +617,7 @@ def create_overview_tile(
 
     if options.verbose:
         logger.debug(
-            f"\tbuild from zoom {base_tz}, tiles: %s"
+            f"父级层级 {base_tz}, tiles: %s"
             % ",".join(["(%d, %d)" % (t[0], t[1]) for t in base_tiles])
         )
 
@@ -973,16 +980,12 @@ def worker_tile_details(
 def single_threaded_tiling(
         input_file: str, output_folder: str, options: Options
 ) -> None:
-    """
-    Keep a single threaded version that stays clear of multiprocessing, for platforms that would not
-    support it
-    """
     if options.verbose:
-        logger.debug("Begin tiles details calc")
+        logger.debug("开始构建切片任务列表")
     conf, tile_details = worker_tile_details(input_file, output_folder, options)
 
     if options.verbose:
-        logger.debug("Tiles details calc complete.")
+        logger.debug("切片任务列表构建结束")
 
     if not options.verbose and not options.quiet:
         base_progress_bar = ProgressBar(len(tile_details))
@@ -1001,7 +1004,8 @@ def single_threaded_tiling(
     if not options.quiet:
         count = count_overview_tiles(conf)
         if count:
-            logger.info("Generating Overview Tiles:")
+            logger.info("")
+            logger.info("开始切子瓦片")
 
             if not options.verbose:
                 overview_progress_bar = ProgressBar(count)

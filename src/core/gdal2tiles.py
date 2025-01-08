@@ -588,26 +588,23 @@ class GDAL2Tiles:
     def generate_base_tiles(self) -> Tuple[TileJobInfo, List[TileDetail]]:
 
         if not self.options.quiet:
-            logger.info("Generating Base Tiles:")
-
-        if self.options.verbose:
             logger.debug("")
-            logger.debug("Tiles generated from the max zoom level:")
-            logger.debug("----------------------------------------")
-            logger.debug("")
+            logger.info("开始最高层级切片")
 
-        # Set the bounds
+        # 最高级别瓦片坐标bound
         tminx, tminy, tmaxx, tmaxy = self.tminmax[self.tmaxz]
 
         ds = self.warped_input_dataset
-        tilebands = self.dataBandsCount + 1
-        querysize = self.querysize
+        tilebands = self.dataBandsCount + 1  # TODO 波段数量为什么加1
+        querysize = self.querysize  # TODO querysize代表什么
 
         if self.options.verbose:
-            logger.debug("dataBandsCount: %d" % self.dataBandsCount)
-            logger.debug("tilebands: %d" % tilebands)
+            logger.debug("数据集波段数量: %d" % self.dataBandsCount)
+            logger.debug("瓦片波段数量: %d" % tilebands)
 
         tcount = (1 + abs(tmaxx - tminx)) * (1 + abs(tmaxy - tminy))
+        logger.debug("顶层瓦片总数: %d" % tcount)
+
         ti = 0
 
         tile_details = []
@@ -631,7 +628,7 @@ class GDAL2Tiles:
                     "%s.%s" % (ytile, self.tileext),
                 )
                 if self.options.verbose:
-                    logger.debug("%d / %d, %s" % (ti, tcount, tilefilename))
+                    logger.debug("顶层瓦片切片进度：%d / %d, 瓦片输出路径：%s" % (ti, tcount, tilefilename))
 
                 if self.options.resume and isfile(tilefilename):
                     if self.options.verbose:
@@ -657,13 +654,21 @@ class GDAL2Tiles:
                     # Pixel size in the raster covering query geo extent
                     nativesize = wb[0] + wb[2]
                     if self.options.verbose:
+                        # wb是切片有效像元(数据集边界被正方形切割，不完整)的左上角和右下角坐标 TODO 什么坐标？不是像素坐标
                         logger.debug(
-                            f"\tNative Extent (querysize {nativesize}): {rb}, {wb}"
+                            "Native Extent (querysize %s): %s, %s" % (nativesize, rb, wb)
                         )
 
                     # Tile bounds in raster coordinates for ReadRaster query
                     rb, wb = self.geo_query(
                         ds, b[0], b[3], b[2], b[1], querysize=querysize
+                    )
+
+                    # TODO 为什么又执行一边geo_query
+                    # Native Extent (querysize 929): (1985, 2446, 929, 929), (0, 0, 929, 929)
+                    # new Native Extent (querysize 929): (1985, 2446, 929, 929), (0, 0, 1024, 1024)
+                    logger.debug(
+                        "new Native Extent (querysize %s): %s, %s" % (nativesize, rb, wb)
                     )
 
                     rx, ry, rxsize, rysize = rb
