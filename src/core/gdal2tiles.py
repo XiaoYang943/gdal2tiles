@@ -433,7 +433,7 @@ class GDAL2Tiles:
                 # one, generate an oversample temporary VRT file, and tile from
                 # it
                 oversample_factor = 1 << (self.tmaxz - self.nativezoom)
-                if self.options.resampling in ("average", "antialias"):
+                if self.options.resampling in ("average"):
                     resampleAlg = "average"
                 elif self.options.resampling in (
                         "near",

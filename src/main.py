@@ -59,7 +59,6 @@ try:
 
     numpy_available = True
 except ImportError:
-    # 'antialias' resampling is not available
     numpy_available = False
 
 __version__ = gdal.__version__
@@ -71,7 +70,6 @@ resampling_list = (
     "cubic",
     "cubicspline",
     "lanczos",
-    "antialias",
     "mode",
     "max",
     "min",
@@ -269,21 +267,20 @@ def create_base_tile(tile_job_info: "TileJobInfo", tile_detail: "TileDetail") ->
 
     del data
 
-    if options.resampling != "antialias":
-        # 切顶层瓦片为图片
-        out_drv.CreateCopy(
-            tilefilename,
-            dstile
-            if tile_job_info.tile_driver != "JPEG"
-            else remove_alpha_band(dstile),
-            strict=0,
-            options=_get_creation_options(options),
-        )
+    # 切顶层瓦片为图片
+    out_drv.CreateCopy(
+        tilefilename,
+        dstile
+        if tile_job_info.tile_driver != "JPEG"
+        else remove_alpha_band(dstile),
+        strict=0,
+        options=_get_creation_options(options),
+    )
 
-        # Remove useless side car file
-        aux_xml = tilefilename + ".aux.xml"
-        if gdal.VSIStatL(aux_xml) is not None:
-            gdal.Unlink(aux_xml)
+    # Remove useless side car file
+    aux_xml = tilefilename + ".aux.xml"
+    if gdal.VSIStatL(aux_xml) is not None:
+        gdal.Unlink(aux_xml)
 
     del dstile
 
@@ -358,12 +355,11 @@ def create_overview_tile(
         "", 2 * tile_job_info.tile_size, 2 * tile_job_info.tile_size, tilebands
     )
     dsquery.GetRasterBand(tilebands).SetColorInterpretation(gdal.GCI_AlphaBand)
-    # TODO: fill the null value
+
+    # 创建大小为父级瓦片临时数据集，用于存储本级瓦片切片结果
     dstile = mem_driver.Create(
         "", tile_job_info.tile_size, tile_job_info.tile_size, tilebands
     )
-
-    # 创建大小为父级瓦片临时数据集，用于存储本级瓦片切片结果
     dstile.GetRasterBand(tilebands).SetColorInterpretation(gdal.GCI_AlphaBand)
 
     usable_base_tiles = []
@@ -471,20 +467,19 @@ def create_overview_tile(
 
     scale_query_to_tile(dsquery, dstile, options, tilefilename=tilefilename)
     # Write a copy of tile to png/jpg
-    if options.resampling != "antialias":
-        # 切子层瓦片为图片
-        out_driver.CreateCopy(
-            tilefilename,
-            dstile
-            if tile_job_info.tile_driver != "JPEG"
-            else remove_alpha_band(dstile),
-            strict=0,
-            options=_get_creation_options(options),
-        )
-        # Remove useless side car file
-        aux_xml = tilefilename + ".aux.xml"
-        if gdal.VSIStatL(aux_xml) is not None:
-            gdal.Unlink(aux_xml)
+    # 切子层瓦片为图片
+    out_driver.CreateCopy(
+        tilefilename,
+        dstile
+        if tile_job_info.tile_driver != "JPEG"
+        else remove_alpha_band(dstile),
+        strict=0,
+        options=_get_creation_options(options),
+    )
+    # Remove useless side car file
+    aux_xml = tilefilename + ".aux.xml"
+    if gdal.VSIStatL(aux_xml) is not None:
+        gdal.Unlink(aux_xml)
 
     if options.verbose:
         logger.debug(
@@ -798,13 +793,6 @@ def options_post_processing(
         if out_path.endswith("/"):
             out_path = out_path[:-1]
         options.url += os.path.basename(out_path) + "/"
-
-    # Supported options
-    if options.resampling == "antialias" and not numpy_available:
-        exit_with_error(
-            "'antialias' resampling algorithm is not available.",
-            "Install PIL (Python Imaging Library) and numpy.",
-        )
 
     if options.tiledriver == "WEBP":
         if gdal.GetDriverByName(options.tiledriver) is None:

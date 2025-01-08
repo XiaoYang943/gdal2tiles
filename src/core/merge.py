@@ -1,5 +1,3 @@
-import os
-
 from osgeo import gdal
 
 from src.log.log import exit_with_error
@@ -12,7 +10,6 @@ try:
 
     numpy_available = True
 except ImportError:
-    # 'antialias' resampling is not available
     numpy_available = False
 
 
@@ -70,41 +67,6 @@ def scale_query_to_tile(dsquery, dstile, options, tilefilename=""):
                 exit_with_error(
                     "RegenerateOverview() failed on %s, error %d" % (tilefilename, res)
                 )
-
-    elif options.resampling == "antialias" and numpy_available:
-
-        if tilefilename.startswith("/vsi"):
-            raise Exception(
-                "Outputting to /vsi file systems with antialias mode is not supported"
-            )
-
-        # Scaling by PIL (Python Imaging Library) - improved Lanczos
-        array = numpy.zeros((querysize, querysize, tilebands), numpy.uint8)
-        for i in range(tilebands):
-            array[:, :, i] = gdalarray.BandReadAsArray(
-                dsquery.GetRasterBand(i + 1), 0, 0, querysize, querysize
-            )
-        if options.tiledriver == "JPEG" and tilebands == 2:
-            im = Image.fromarray(array[:, :, 0], "L")
-        elif options.tiledriver == "JPEG" and tilebands == 4:
-            im = Image.fromarray(array[:, :, 0:3], "RGB")
-        else:
-            im = Image.fromarray(array, "RGBA")
-        im1 = im.resize((tile_size, tile_size), Image.LANCZOS)
-        if os.path.exists(tilefilename):
-            im0 = Image.open(tilefilename)
-            im1 = Image.composite(im1, im0, im1)
-
-        params = {}
-        if options.tiledriver == "WEBP":
-            if options.webp_lossless:
-                params["lossless"] = True
-            else:
-                params["quality"] = options.webp_quality
-        elif options.tiledriver == "JPEG":
-            params["quality"] = options.jpeg_quality
-        im1.save(tilefilename, options.tiledriver, **params)
-
     else:
 
         if options.resampling == "near":
