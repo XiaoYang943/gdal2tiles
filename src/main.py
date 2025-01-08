@@ -138,9 +138,6 @@ Class is available under the open-source GDAL license (www.gdal.org).
 """
 
 
-# 将查询数据集缩放到瓦片数据集，把高层级的四张合并为一张
-
-
 def _get_creation_options(options):
     copts = []
     if options.tiledriver == "WEBP":

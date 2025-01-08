@@ -13,6 +13,7 @@ except ImportError:
     numpy_available = False
 
 
+# 将查询数据集缩放到瓦片数据集，把高层级的四张合并为一张
 def scale_query_to_tile(dsquery, dstile, options, tilefilename=""):
     """Scales down query dataset to the tile dataset"""
 

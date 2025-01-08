@@ -56,11 +56,11 @@ class GDAL2Tiles:
         self.tileswne = None
         # 数据集的envelop
         self.swne = None
-        # 仿射变换六参数-leftTopX
+        # 仿射变换六参数-dataSetLeftTopX
         self.ominx = None
         # rightTopX
         self.omaxx = None
-        # 仿射变换六参数-leftTopY
+        # 仿射变换六参数-dataSetLeftTopY
         self.omaxy = None
         # rightBottomY
         self.ominy = None
@@ -99,7 +99,10 @@ class GDAL2Tiles:
 
         # How big should be query window be for scaling down
         # Later on reset according the chosen resampling algorithm
-        # 查询大小 TODO ?
+        # 查询大小，4倍应该是为了处理瓦片接边处的像素值
+        # 4倍可能太大了，降低了效率，https://github.com/OSGeo/gdal/issues/10803
+        # 和瓦片大小保持一致，应该也可以
+        # query = tileSize * 1 反而效果更好，瓦片接边处没有明显的线，而4*有
         self.querysize = 4 * self.tile_size
 
         # 数据集路径
@@ -635,8 +638,8 @@ class GDAL2Tiles:
                         logger.debug("Tile generation skipped because of --resume")
                     continue
 
+                # 根据瓦片坐标计算瓦片边界
                 if self.options.profile == "mercator":
-                    # Tile bounds in EPSG:3857
                     b = self.mercator.TileBounds(tx, ty, tz)
                 elif self.options.profile == "geodetic":
                     b = self.geodetic.TileBounds(tx, ty, tz)
@@ -649,6 +652,7 @@ class GDAL2Tiles:
                 # to the native resolution (and return smaller query tile) for scaling
 
                 if self.options.profile != "raster":
+                    # b(minx, miny, maxx, maxy)
                     rb, wb = self.geo_query(ds, b[0], b[3], b[2], b[1])
 
                     # Pixel size in the raster covering query geo extent
@@ -671,7 +675,7 @@ class GDAL2Tiles:
                         "new Native Extent (querysize %s): %s, %s" % (nativesize, rb, wb)
                     )
 
-                    rx, ry, rxsize, rysize = rb
+                    tileLeftTopPixelX, tileLeftTopPixelY, tilePixelWidth, tilePixelHeight = rb
                     wx, wy, wxsize, wysize = wb
 
                 else:  # 'raster' profile:
@@ -685,30 +689,30 @@ class GDAL2Tiles:
                     ysize = self.warped_input_dataset.RasterYSize
                     querysize = self.tile_size
 
-                    rx = tx * tsize
-                    rxsize = 0
+                    tileLeftTopPixelX = tx * tsize
+                    tilePixelWidth = 0
                     if tx == tmaxx:
-                        rxsize = xsize % tsize
-                    if rxsize == 0:
-                        rxsize = tsize
+                        tilePixelWidth = xsize % tsize
+                    if tilePixelWidth == 0:
+                        tilePixelWidth = tsize
 
-                    ry = ty * tsize
-                    rysize = 0
+                    tileLeftTopPixelY = ty * tsize
+                    tilePixelHeight = 0
                     if ty == tmaxy:
-                        rysize = ysize % tsize
-                    if rysize == 0:
-                        rysize = tsize
+                        tilePixelHeight = ysize % tsize
+                    if tilePixelHeight == 0:
+                        tilePixelHeight = tsize
 
                     wx, wy = 0, 0
-                    wxsize = int(rxsize / float(tsize) * self.tile_size)
-                    wysize = int(rysize / float(tsize) * self.tile_size)
+                    wxsize = int(tilePixelWidth / float(tsize) * self.tile_size)
+                    wysize = int(tilePixelHeight / float(tsize) * self.tile_size)
 
                     if not self.options.xyz:
-                        ry = ysize - (ty * tsize) - rysize
+                        tileLeftTopPixelY = ysize - (ty * tsize) - tilePixelHeight
                         if wysize != self.tile_size:
                             wy = self.tile_size - wysize
 
-                if rxsize == 0 or rysize == 0 or wxsize == 0 or wysize == 0:
+                if tilePixelWidth == 0 or tilePixelHeight == 0 or wxsize == 0 or wysize == 0:
                     if self.options.verbose:
                         logger.debug("\tExcluding tile with no pixel coverage")
                     continue
@@ -721,10 +725,10 @@ class GDAL2Tiles:
                         tx=tx,
                         ty=ytile,
                         tz=tz,
-                        rx=rx,
-                        ry=ry,
-                        rxsize=rxsize,
-                        rysize=rysize,
+                        rx=tileLeftTopPixelX,
+                        ry=tileLeftTopPixelY,
+                        rxsize=tilePixelWidth,
+                        rysize=tilePixelHeight,
                         wx=wx,
                         wy=wy,
                         wxsize=wxsize,
@@ -753,49 +757,49 @@ class GDAL2Tiles:
 
         return conf, tile_details
 
-    def geo_query(self, ds, ulx, uly, lrx, lry, querysize=0):
-        """
-        For given dataset and query in cartographic coordinates returns parameters for ReadRaster()
-        in raster coordinates and x/y shifts (for border tiles). If the querysize is not given, the
-        extent is returned in the native resolution of dataset ds.
-
-        raises Gdal2TilesError if the dataset does not contain anything inside this geo_query
-        """
+    def geo_query(self, ds, tileMinX, tileMaxY, tileMaxX, tileMinY, querysize=0):
         geotran = ds.GetGeoTransform()
-        rx = int((ulx - geotran[0]) / geotran[1] + 0.001)
-        ry = int((uly - geotran[3]) / geotran[5] + 0.001)
-        rxsize = max(1, int((lrx - ulx) / geotran[1] + 0.5))
-        rysize = max(1, int((lry - uly) / geotran[5] + 0.5))
+        dataSetPixelWidth = geotran[1]
+        dataSetPixelHeight = geotran[5]
+        dataSetLeftTopX = geotran[0]
+        dataSetLeftTopY = geotran[3]
 
+        # TODO 为什么要加0.001、0.5? 是否是为了解决python精度的问题？这样是否会造成切片偏移？
+        tileLeftTopPixelX = int((tileMinX - dataSetLeftTopX) / dataSetPixelWidth + 0.001)  # 瓦片左上角的像素坐标x(基于数据集左上角)
+        tileLeftTopPixelY = int((tileMaxY - dataSetLeftTopY) / dataSetPixelHeight + 0.001)  # 瓦片左上角的像素坐标y(基于数据集左上角)
+        tilePixelWidth = max(1, int((tileMaxX - tileMinX) / dataSetPixelWidth + 0.5))  # 瓦片像素宽度
+        tilePixelHeight = max(1, int((tileMinY - tileMaxY) / dataSetPixelHeight + 0.5))  # 瓦片像素高度
+
+        # querysize 默认是瓦片宽度*4，即256*4=1024。而不同的重采样方法 querysize 大小不同
         if not querysize:
-            wxsize, wysize = rxsize, rysize
+            wxsize, wysize = tilePixelWidth, tilePixelHeight
         else:
             wxsize, wysize = querysize, querysize
 
         # Coordinates should not go out of the bounds of the raster
         wx = 0
-        if rx < 0:
-            rxshift = abs(rx)
-            wx = int(wxsize * (float(rxshift) / rxsize))
+        if tileLeftTopPixelX < 0:
+            rxshift = abs(tileLeftTopPixelX)
+            wx = int(wxsize * (float(rxshift) / tilePixelWidth))
             wxsize = wxsize - wx
-            rxsize = rxsize - int(rxsize * (float(rxshift) / rxsize))
-            rx = 0
-        if rx + rxsize > ds.RasterXSize:
-            wxsize = int(wxsize * (float(ds.RasterXSize - rx) / rxsize))
-            rxsize = ds.RasterXSize - rx
+            tilePixelWidth = tilePixelWidth - int(tilePixelWidth * (float(rxshift) / tilePixelWidth))
+            tileLeftTopPixelX = 0
+        if tileLeftTopPixelX + tilePixelWidth > ds.RasterXSize:
+            wxsize = int(wxsize * (float(ds.RasterXSize - tileLeftTopPixelX) / tilePixelWidth))
+            tilePixelWidth = ds.RasterXSize - tileLeftTopPixelX
 
         wy = 0
-        if ry < 0:
-            ryshift = abs(ry)
-            wy = int(wysize * (float(ryshift) / rysize))
+        if tileLeftTopPixelY < 0:
+            ryshift = abs(tileLeftTopPixelY)
+            wy = int(wysize * (float(ryshift) / tilePixelHeight))
             wysize = wysize - wy
-            rysize = rysize - int(rysize * (float(ryshift) / rysize))
-            ry = 0
-        if ry + rysize > ds.RasterYSize:
-            wysize = int(wysize * (float(ds.RasterYSize - ry) / rysize))
-            rysize = ds.RasterYSize - ry
+            tilePixelHeight = tilePixelHeight - int(tilePixelHeight * (float(ryshift) / tilePixelHeight))
+            tileLeftTopPixelY = 0
+        if tileLeftTopPixelY + tilePixelHeight > ds.RasterYSize:
+            wysize = int(wysize * (float(ds.RasterYSize - tileLeftTopPixelY) / tilePixelHeight))
+            tilePixelHeight = ds.RasterYSize - tileLeftTopPixelY
 
-        return (rx, ry, rxsize, rysize), (wx, wy, wxsize, wysize)
+        return (tileLeftTopPixelX, tileLeftTopPixelY, tilePixelWidth, tilePixelHeight), (wx, wy, wxsize, wysize)
 
     def generate_tilemapresource(self) -> str:
         """

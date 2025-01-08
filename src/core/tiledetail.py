@@ -1,10 +1,17 @@
 class TileDetail:
+    # 瓦片坐标X
     tx = 0
+    # 瓦片坐标Y
     ty = 0
+    # 瓦片坐标Z
     tz = 0
+    # 瓦片左上角像素X
     rx = 0
+    # 瓦片左上角像素Y
     ry = 0
+    # 瓦片像素宽度
     rxsize = 0
+    # 瓦片像素高度
     rysize = 0
     wx = 0
     wy = 0
